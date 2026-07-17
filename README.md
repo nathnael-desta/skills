@@ -12,7 +12,7 @@ target, and manages project or global installation without manual file copying.
 From the repository's GitHub location:
 
 ```bash
-npx skills@latest add <github-owner>/<repository>
+npx skills@latest add nathnael-desta/skills
 ```
 
 From a local clone:
@@ -67,4 +67,3 @@ provenance and update installed skills from upstream. Before publishing, run
 ## License
 
 MIT
-# skills

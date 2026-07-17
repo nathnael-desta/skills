@@ -1,0 +1,37 @@
+{
+  "name": "linear-beads-skills",
+  "version": "0.1.0",
+  "description": "Portable agent skills for Linear and Beads development workflows",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nathnael-desta/skills.git"
+  },
+  "homepage": "https://github.com/nathnael-desta/skills#readme",
+  "bugs": "https://github.com/nathnael-desta/skills/issues",
+  "type": "module",
+  "files": [
+    "*/SKILL.md",
+    "*/references/**",
+    "*/templates/**",
+    "docs/**",
+    "research/**",
+    "scripts/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "format:check": "prettier --check README.md package.json scripts/validate.mjs docs/**/*.md research/**/*.md setup-linear-beads/**/*.md",
+    "test": "node scripts/validate.mjs && npm run format:check",
+    "verify:skills": "npx skills@latest add . --list"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
