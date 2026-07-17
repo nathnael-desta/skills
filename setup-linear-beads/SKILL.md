@@ -13,6 +13,9 @@ artifacts. Never snapshot or recreate upstream behavior here.
 
 ## Interaction contract
 
+- The first action is a skill-loader call for `setup-matt-pocock-skills`. Do not
+  inspect the repository or address the user until its current body is in
+  context. If the loader is unavailable or fails, stop and report that blocker.
 - Explore first, then give a short summary of what is present and missing.
 - Ask one section at a time and wait for the answer before continuing.
 - Lead with the recommended answer so the user can accept it in one word.
@@ -21,12 +24,17 @@ artifacts. Never snapshot or recreate upstream behavior here.
 - After the questions, show draft documents plus the exact commands and file
   mutations. Write only after the user confirms.
 
+The first user-facing setup turn may contain findings and exactly one question.
+Every subsequent turn asks at most one unresolved section. Never print a
+numbered questionnaire, request all choices in one reply, or show the mutation
+plan before the upstream process reaches its draft-confirmation step.
+
 ## 1. Explore
 
-First load `setup-matt-pocock-skills` with the skill loader. Read its current
-instructions and bundled templates; they are authoritative for every behavior
-it owns. This ensures an updated upstream installation changes this flow without
-requiring this wrapper to be rewritten.
+The interaction contract's loader call is a hard gate. Read the loaded skill's
+current instructions and bundled templates; they are authoritative for every
+behavior it owns. This ensures an updated upstream installation changes this
+flow without requiring this wrapper to be rewritten.
 
 If it is not installed, ask whether to install the recommended Matt bundle
 (recommended), only the setup dependency, choose interactively, or install all,
