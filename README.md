@@ -41,8 +41,6 @@ continuing.
 
 ## Skills
 
-- `agent-browser` - browser automation through the `agent-browser` CLI.
-- `frontend-verification` - browser-based completion checks for frontend work.
 - `setup-linear-beads` - configure Linear as the human planning layer and
   Beads as the implementation execution graph, with optional support for Matt
   Pocock's engineering skills.
