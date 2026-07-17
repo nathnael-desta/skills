@@ -38,8 +38,9 @@ its identifier.
 
 After installation, restart or reload the agent when required and invoke
 `setup-linear-beads` from the target project. The setup asks about agents,
-Linear access, Beads storage and integration, instruction-policy location,
-completion mode, and optional Matt Pocock skills. It does not require an
+resolves Linear access, and then runs the currently installed Matt Pocock setup
+as its base flow with Linear preselected. It adds opinionated Beads defaults and
+routing policy to the same draft and confirmation. It does not require an
 existing `AGENTS.md` and does not select a Linear issue to implement.
 
 ## Verify installation

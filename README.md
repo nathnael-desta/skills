@@ -12,7 +12,18 @@ target, and manages project or global installation without manual file copying.
 From the repository's GitHub location:
 
 ```bash
-npx skills@latest add nathnael-desta/skills
+npx skills@latest add nathnael-desta/skills --global
+```
+
+Because this repository exposes one skill, the installer selects
+`setup-linear-beads` automatically. OpenCode is included through the always-on
+Universal `.agents/skills` target; select any additional agent-specific targets
+you also want, then confirm the installation.
+
+For a non-interactive OpenCode installation:
+
+```bash
+npx skills@latest add nathnael-desta/skills --skill setup-linear-beads --agent opencode --global -y
 ```
 
 From a local clone:
@@ -21,18 +32,18 @@ From a local clone:
 npx skills@latest add /path/to/this-repository
 ```
 
-Choose `setup-linear-beads` and the agents that will run it. Add `--global` for
-a user-level installation; project installation is the default. See
-[installation and lifecycle](docs/installation.md) for targeted, unattended,
-update, verification, and removal commands.
+Omit `--global` to install into only the current project. See [installation and
+lifecycle](docs/installation.md) for other targeted, unattended, update,
+verification, and removal commands.
 
 Restart or reload the selected agent if required, then invoke
 `setup-linear-beads` in the Git repository you want to configure.
 
 `setup-linear-beads` is the single setup entry point. It can configure Claude
 Code, OpenCode, Codex, or another user-selected agent; install a lean
-project-local Beads skill for OpenCode; and optionally install and run Matt
-Pocock's engineering-skills setup through Vercel Skills.
+project-local Beads skill for OpenCode; and extend the currently installed Matt
+Pocock setup skill with opinionated Linear and Beads defaults. If the upstream
+setup dependency is missing, it offers to install it through Vercel Skills.
 
 The setup distinguishes machine prerequisites from per-repository state. If the
 Beads CLI, repository database, Linear credentials, team selection, or agent
@@ -42,8 +53,8 @@ continuing.
 ## Skills
 
 - `setup-linear-beads` - configure Linear as the human planning layer and
-  Beads as the implementation execution graph, with optional support for Matt
-  Pocock's engineering skills.
+  Beads as the implementation execution graph by composing the current Matt
+  Pocock repository setup with additional defaults and routing policy.
 
 ## Development
 

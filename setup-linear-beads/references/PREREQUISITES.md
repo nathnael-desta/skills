@@ -16,10 +16,10 @@ Inspect each layer and explain every missing step before changing it.
 | Agent integration  | Repository       | Every selected agent discovers Beads                          | Run the applicable agent branch from the setup skill          |
 | Matt skills        | Selected scope   | Requested skills appear for every selected agent              | Install through Vercel Skills for the chosen agents and scope |
 
-An agent instruction file is not a prerequisite. In a new repository, ask which
-agent environments the user intends to run and where shared routing policy
-should live. Do not create `AGENTS.md`, `CLAUDE.md`, or another policy file until
-the user selects that target.
+An agent instruction file is not a prerequisite. The canonical Linear + Beads
+routing policy lives in `docs/agents/issue-tracker.md`. If neither root
+`CLAUDE.md` nor `AGENTS.md` exists, ask which one to create for the pointer to
+that policy; do not choose one silently.
 
 ## Manage skills
 
