@@ -1,7 +1,7 @@
 {
-  "name": "linear-beads-skills",
+  "name": "github-beads-skills",
   "version": "0.1.0",
-  "description": "Portable agent skills for Linear and Beads development workflows",
+  "description": "Portable agent skills for GitHub Issues and Beads development workflows",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,7 +21,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "format:check": "prettier --check README.md package.json scripts/validate.mjs docs/**/*.md research/**/*.md setup-linear-beads/**/*.md",
+    "format:check": "prettier --check README.md package.json scripts/validate.mjs docs/**/*.md research/**/*.md setup-github-beads/**/*.md",
     "test": "node scripts/validate.mjs && npm run format:check",
     "verify:skills": "npx skills@latest add . --list"
   },

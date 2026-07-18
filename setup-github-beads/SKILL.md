@@ -1,15 +1,15 @@
 ---
-name: setup-linear-beads
-description: Extend the installed Matt Pocock repository setup with opinionated Linear and Beads configuration in one unified flow.
+name: setup-github-beads
+description: Extend the installed Matt Pocock repository setup with opinionated Beads configuration for GitHub repositories.
 disable-model-invocation: true
 ---
 
-# Setup Linear + Beads
+# Setup GitHub + Beads
 
 Configure one repository by composing the currently installed
-`setup-matt-pocock-skills` with this skill's Linear and Beads overlay. The
-upstream skill is the base process; this skill supplies defaults and additional
-artifacts. Never snapshot or recreate upstream behavior here.
+`setup-matt-pocock-skills` with this skill's Beads overlay. The upstream skill
+owns GitHub Issues, labels, and domain docs; this skill adds Beads without
+recreating that behavior.
 
 ## Interaction contract
 
@@ -20,7 +20,6 @@ artifacts. Never snapshot or recreate upstream behavior here.
 - Ask one section at a time and wait for the answer before continuing.
 - Lead with the recommended answer so the user can accept it in one word.
 - Skip choices settled by inspection and apply documented defaults silently.
-- Explain a choice in one line only when it genuinely changes the setup.
 - After the questions, show draft documents plus the exact commands and file
   mutations. Write only after the user confirms.
 
@@ -33,8 +32,7 @@ plan before the upstream process reaches its draft-confirmation step.
 
 The interaction contract's loader call is a hard gate. Read the loaded skill's
 current instructions and bundled templates; they are authoritative for every
-behavior it owns. This ensures an updated upstream installation changes this
-flow without requiring this wrapper to be rewritten.
+behavior they own.
 
 If it is not installed, ask whether to install the recommended Matt bundle
 (recommended), only the setup dependency, choose interactively, or install all,
@@ -44,18 +42,17 @@ that this unified setup requires the upstream setup skill. If newly installed
 skills cannot be loaded in the current session, give the exact reload and resume
 instruction and stop.
 
-Perform upstream's current exploration plus this overlay's checks:
+Perform upstream's current exploration plus these checks:
 
-- Git state, remotes, root `AGENTS.md` and `CLAUDE.md`, `docs/agents/`, domain
-  docs, ADR directories, `.scratch/`, and monorepo signals.
-- Existing Linear policy or adapter. Reuse it instead of adding another access
-  path.
-- `bd version`, `bd status`, `.beads/`, `bd setup --list`, and the installed
-  CLI's relevant `bd <command> --help` output.
-- Selected-agent integrations and installed skills at project and global scope
-  with `npx skills@latest list --json` and `--global`.
-- Whether the recommended Matt workflow bundle is available for each selected
-  agent and scope.
+- Confirm that the intended repository has a GitHub remote and inspect existing
+  GitHub tracker policy without replacing it.
+- Run `gh auth status`.
+- Run `bd version`, `bd status`, `bd setup --list`, `bd github status`, and the
+  installed CLI's relevant `bd <command> --help` output.
+- Inspect `.beads/`, selected-agent integrations, and installed skills at project
+  and global scope with `npx skills@latest list --json` and `--global`.
+- Check whether the recommended Matt workflow bundle is available for every
+  selected agent and scope.
 
 Classify missing prerequisites with
 [prerequisites and recovery](references/PREREQUISITES.md). A missing repository
@@ -71,20 +68,16 @@ the wrong repository, ask first:
 Execute the loaded upstream process as the base flow in this conversation. Do
 not invoke it as a separate setup before or afterward. Preserve its current
 question order, defaults, skip conditions, templates, confirmation gate, and
-write rules except for the explicit overlays below.
+write rules.
 
-When upstream reaches its issue-tracker section, preselect **Other: Linear** and
-supply this skill's configured Linear workflow as the answer. Do not ask the
-user to choose among GitHub, GitLab, local markdown, and Linear. Continue with
-all later upstream sections exactly as its currently installed instructions
-require.
+Let upstream select and configure GitHub from the repository remote. Its GitHub
+issue-tracker template remains authoritative and unmodified except for appending
+the managed routing section from this skill. Do not restate its GitHub commands,
+labels, Wayfinder operations, hierarchy, dependencies, or project conventions.
 
-Ask any unresolved agent and Linear-access overlay questions immediately before
-that upstream issue-tracker section, so its Linear document has a concrete
-adapter to record. When upstream reaches its draft confirmation, pause it, merge
-the Beads commands and routing section into that draft, and request one combined
-confirmation. Then resume upstream's write and completion steps together with
-this overlay's apply and verification work.
+When upstream reaches draft confirmation, pause it, merge the Beads commands and
+routing section into that draft, and request one combined confirmation. Then
+resume upstream's write and completion steps together with this overlay.
 
 ### Overlay A: Agents
 
@@ -96,20 +89,14 @@ Otherwise ask one question, recommending the agent running this setup:
 Offer OpenCode, Claude Code, Codex, multiple, or a user-named environment. Only
 use recipes listed by `bd setup --list`.
 
-### Overlay B: Linear access
+### Overlay B: GitHub access for Beads
 
-Reuse an existing Linear adapter. If none exists, ask one question:
-
-> Recommended: use the official Linear MCP integration for agent reads and updates. Use that, or another existing Linear client?
-
-Follow that client's official setup instructions. Separately, Beads needs its
-supported Linear authentication. Reuse Beads OAuth when configured; otherwise
-ask the user to expose `LINEAR_API_KEY` through their shell or secret manager.
-Never request or write the secret. Wait until authentication is available, then
-run `bd linear teams`; ask the user to choose a team only when more than one is
-plausible. Persist the choice as `linear.team_id`, or `linear.team_ids` only
-when the user intentionally selected multiple teams, then verify `bd linear
-status`.
+Reuse the repository inferred from the Git remote when `bd github status` is
+healthy. Otherwise configure only the missing `github.repository` value from
+that remote. Reuse `GITHUB_TOKEN` when available; otherwise ask the user to make
+`GITHUB_TOKEN` available through their shell or secret manager. Never request or
+write the token value. GitHub operations outside Beads continue to use the
+upstream skill's configured `gh` CLI path.
 
 ### Overlay C: Beads execution
 
@@ -138,34 +125,34 @@ Initialize only when no active Beads database exists. Prefer `bd init
 
 ## 3. Draft and confirm
 
-Show one coherent setup draft, not separate Matt and Beads drafts:
+Show one coherent setup draft containing:
 
 - Every draft and artifact the currently loaded upstream setup requires.
-- The upstream issue-tracker document adapted for Linear, naming the configured
-  adapter and containing the managed section from
-  [routing policy](references/POLICY.md).
+- The upstream GitHub issue-tracker document with the managed section from
+  [routing policy](references/POLICY.md) appended.
 - Every command and file mutation, including generated agent integration files.
 
-Explain that the policy routes human planning and approval to Linear, mirrors
-one user-authorized feature to one parent Bead, and routes implementation slices
-to descendants. Let the user edit the draft, then obtain one confirmation.
+Explain that GitHub remains the human-visible tracker for the existing Matt
+workflows, while Beads receives only user-authorized implementation work. Let
+the user edit the draft, then obtain one confirmation.
 
 ## 4. Apply and verify
 
 Run the confirmed commands and write the confirmed drafts. Preserve existing
 instructions and update marked sections in place.
 
-Verify `bd doctor`, `bd linear status`, each selected agent integration, and
-skill discovery at its selected scope. In lean OpenCode mode, require an exact
-match between the generated skill body and `bd setup opencode --print`. Confirm
-that the policy declares one completion mode and contains no secret.
+Verify `gh auth status`, `bd doctor`, `bd github status`, each selected agent
+integration, and skill discovery at its selected scope. In lean OpenCode mode,
+require an exact match between the generated skill body and `bd setup opencode
+--print`. Confirm that the policy declares one completion mode and contains no
+secret.
 
 Setup is complete only when:
 
-- Existing human-facing work still uses Linear.
-- The loaded upstream setup's current completion criteria pass.
+- The loaded upstream setup's current completion criteria pass with GitHub as
+  the issue tracker.
 - Beads is healthy and every selected agent can discover it.
-- The Linear + Beads routing policy is unambiguous.
+- The GitHub + Beads routing policy is unambiguous.
 
 Finish by pointing to [the daily workflow](references/WORKFLOW.md). Do not select
 or import product work during setup.

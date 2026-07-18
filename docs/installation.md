@@ -23,13 +23,13 @@ target. Project scope is the default. Pass `--global` for user scope.
 
 ## Setup entry point
 
-Install only the Linear + Beads setup skill for known agents when an interactive
+Install only the GitHub + Beads setup skill for known agents when an interactive
 selector is not appropriate:
 
 ```bash
-npx skills@latest add nathnael-desta/skills --skill setup-linear-beads --agent opencode -y
-npx skills@latest add nathnael-desta/skills --skill setup-linear-beads --agent claude-code -y
-npx skills@latest add nathnael-desta/skills --skill setup-linear-beads --agent opencode claude-code -y
+npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent opencode -y
+npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent claude-code -y
+npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent opencode claude-code -y
 ```
 
 Supported IDs used by this repository are `opencode`, `claude-code`, and
@@ -37,11 +37,11 @@ Supported IDs used by this repository are `opencode`, `claude-code`, and
 its identifier.
 
 After installation, restart or reload the agent when required and invoke
-`setup-linear-beads` from the target project. The setup asks about agents,
-resolves Linear access, and then runs the currently installed Matt Pocock setup
-as its base flow with Linear preselected. It adds opinionated Beads defaults and
-routing policy to the same draft and confirmation. It does not require an
-existing `AGENTS.md` and does not select a Linear issue to implement.
+`setup-github-beads` from the target project. The setup runs the currently
+installed Matt Pocock setup as its base flow and lets that upstream process own
+GitHub Issues, labels, and domain docs. It adds only Beads defaults, GitHub sync
+access, and routing policy to the same draft and confirmation. It does not
+require an existing `AGENTS.md` and does not select an issue to implement.
 
 ## Verify installation
 
@@ -75,10 +75,10 @@ npx skills@latest update --global
 Update one skill when only that workflow should move:
 
 ```bash
-npx skills@latest update setup-linear-beads --project
+npx skills@latest update setup-github-beads --project
 ```
 
-After updating `setup-linear-beads`, rerun it in the target repository. It
+After updating `setup-github-beads`, rerun it in the target repository. It
 checks agent integrations and regenerates the lean OpenCode Beads skill when the
 installed Beads OpenCode recipe changed.
 
@@ -87,8 +87,8 @@ installed Beads OpenCode recipe changed.
 Use Vercel Skills rather than moving directories manually:
 
 ```bash
-npx skills@latest remove setup-linear-beads
-npx skills@latest remove setup-linear-beads --global
+npx skills@latest remove setup-github-beads
+npx skills@latest remove setup-github-beads --global
 ```
 
 To change scope or agents, remove the old installation and add it again with the
