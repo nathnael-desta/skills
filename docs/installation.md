@@ -61,7 +61,8 @@ A project install records source provenance in `skills-lock.json`. Review and
 commit that lockfile when it points to a stable shared source such as GitHub and
 the project should reproduce the same skill source. A lockfile created from an
 absolute local path is machine-specific development state and should not be
-committed as a reproducible source.
+committed or reported as a reproducible source. Reinstall from the GitHub source
+before claiming the setup is portable.
 
 ## Update
 
@@ -91,9 +92,11 @@ npx skills@latest remove setup-github-beads
 npx skills@latest remove setup-github-beads --global
 ```
 
-To change scope or agents, remove the old installation and add it again with the
-new `--global` or `--agent` selection. Verify both scopes afterward so stale
-copies do not shadow the intended installation.
+To change scope or agents, remove the named skill at project and global scope as
+needed, then add it again with the new `--global` or `--agent` selection. Avoid
+wildcard removal because it can affect unrelated skills. Verify each selected
+agent at both scopes afterward so stale copies do not shadow the intended
+installation.
 
 ## Repository compatibility
 

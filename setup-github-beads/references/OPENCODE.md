@@ -4,6 +4,28 @@ OpenCode discovers project skills under `.agents/skills/`. The default setup
 generates a skill there from Beads' own current OpenCode recipe rather than
 adding that recipe to `AGENTS.md`.
 
+## Compatibility matrix
+
+Exactly one generator must own each output path. Codex's official recipe owns
+`.agents/skills/beads/SKILL.md`, so lean OpenCode cannot coexist with Codex.
+
+| Selected agents                | Recipe ownership          | OpenCode mode  |
+| ------------------------------ | ------------------------- | -------------- |
+| OpenCode                       | OpenCode lean             | Lean           |
+| OpenCode + Claude Code         | OpenCode lean and Claude  | Lean           |
+| Codex                          | Codex official            | Not applicable |
+| Codex + Claude Code            | Codex and Claude official | Not applicable |
+| Codex + OpenCode               | Codex and OpenCode        | Official       |
+| Codex + OpenCode + Claude Code | All official              | Official       |
+
+When Codex and OpenCode are both selected, run the official recipes and require
+both checks to pass in the same final state:
+
+```bash
+bd setup codex --check
+bd setup opencode --check
+```
+
 ## Lean skill
 
 Run `bd setup opencode --print` and prepend the bundled skill frontmatter to its
@@ -12,11 +34,11 @@ OpenCode guidance while making it discoverable on demand instead of always
 loading it through `AGENTS.md`. The generated recipe tells OpenCode to run
 `bd prime`, so complete operational guidance still comes from the installed CLI.
 
-Check for changes after upgrading Beads with:
-
-```bash
-diff -u <(bd setup opencode --print) <(tail -n +5 .agents/skills/beads/SKILL.md)
-```
+Append the managed tracker-precedence block after the generated recipe. Check
+for changes after upgrading Beads by comparing `bd setup opencode --print` with
+the file content between the frontmatter and precedence markers. A temporary
+extraction or equivalent in-memory comparison is preferable to a line-number-
+dependent command.
 
 Exit status 0 means the installed skill exactly matches the current upstream
 recipe. A diff means it must be regenerated. This provides the same stale-versus-
@@ -42,7 +64,7 @@ Its version and hash markers let `bd setup opencode --check` report whether the
 section is missing, changed, or stale. Rerunning setup updates it in place;
 upgrading Beads alone does not rewrite repository files automatically.
 
-Do not replace that managed section with a pointer and expect upstream checks to
-keep working. Choose the lean skill or the official managed section as one
-authority. Install both only when the user knowingly accepts duplicated
-guidance.
+Do not replace or edit that managed section or the Codex-generated Beads skill;
+doing so breaks upstream checks. Place the tracker-precedence block after all
+generated Beads sections in the automatically loaded instruction file. Choose
+the lean skill or the official managed section as one OpenCode authority.

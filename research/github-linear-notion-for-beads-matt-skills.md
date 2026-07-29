@@ -27,12 +27,12 @@ separate product. None of those appears central to the stated use case.
 
 ## Recommended Division Of Responsibility
 
-| Surface | Responsibility |
-| --- | --- |
-| GitHub Issues | Human-visible feature requests, bugs, specifications, priority, and approval |
-| GitHub Project | The personal Kanban view: `Future`, `Now`, `Paused`, `Done` |
-| Beads | Agent execution graph, tracer-bullet descendants, dependencies, claims, discoveries, and handoffs |
-| Notion | Research notes, broad project thinking, and reference material that is not an executable requirement |
+| Surface             | Responsibility                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| GitHub Issues       | Human-visible feature requests, bugs, specifications, priority, and approval                         |
+| GitHub Project      | The personal Kanban view: `Future`, `Now`, `Paused`, `Done`                                          |
+| Beads               | Agent execution graph, tracer-bullet descendants, dependencies, claims, discoveries, and handoffs    |
+| Notion              | Research notes, broad project thinking, and reference material that is not an executable requirement |
 | Repository Markdown | ADRs, domain context, and technical documentation that agents and code changes must version together |
 
 Do not keep the same task editable in GitHub, Beads, and Notion. GitHub owns the
@@ -44,8 +44,8 @@ to the GitHub issue, but should not be another status authority.
 1. Capture an idea as a GitHub issue and add it to the project in `Future`.
 2. Move it to `Now` when it is selected, or `Paused` when deliberately stopped.
 3. Use `/to-spec` to create or improve the parent feature issue.
-4. Selectively pull that one issue into Beads, for example with `bd github pull
-   <GitHub issue URL>`.
+4. Selectively pull that one issue into Beads with
+   `bd github pull <GitHub issue URL>`.
 5. Use `/to-tickets` to create tracer-bullet descendants in Beads, not duplicate
    Kanban cards for every implementation detail.
 6. Work the scoped frontier with `bd ready --parent <parent-bead-id>` and
@@ -61,15 +61,15 @@ the cleaner default.
 
 ## Capability Comparison
 
-| Need | GitHub | Linear | Consequence here |
-| --- | --- | --- | --- |
-| Simple Kanban | Projects supports board views, custom fields, filters, and automation | Custom issue statuses and project statuses provide a polished workflow | Both satisfy `Future / Now / Paused`; GitHub is sufficient |
-| Parent and child work | Native sub-issues with hierarchy progress | Native parent and sub-issues | Both fit `/to-tickets` |
-| Blocking edges | Native issue dependencies | Native blocking and related issue relations | Both can represent ticket frontiers |
-| Agent access | First-party `gh` CLI plus REST/GraphQL | GraphQL API and official MCP | GitHub matches Matt's built-in path; Linear requires a recorded custom adapter |
-| Beads bridge | Official `bd github pull`, `push`, `sync`, and `status` | Richer `bd linear` mapping and sync controls | Both are viable; Linear is richer, but GitHub has the selective bridge this workflow needs |
-| Code linkage | Issues, PRs, commits, Actions, and Projects share one platform | Strong official GitHub integration | GitHub removes an integration boundary |
-| Long-form knowledge | Repository Markdown, issue bodies, discussions, and wikis | Issue/project documents | Keep Notion for personal research rather than choosing a tracker for its docs |
+| Need                  | GitHub                                                                | Linear                                                                 | Consequence here                                                                           |
+| --------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Simple Kanban         | Projects supports board views, custom fields, filters, and automation | Custom issue statuses and project statuses provide a polished workflow | Both satisfy `Future / Now / Paused`; GitHub is sufficient                                 |
+| Parent and child work | Native sub-issues with hierarchy progress                             | Native parent and sub-issues                                           | Both fit `/to-tickets`                                                                     |
+| Blocking edges        | Native issue dependencies                                             | Native blocking and related issue relations                            | Both can represent ticket frontiers                                                        |
+| Agent access          | First-party `gh` CLI plus REST/GraphQL                                | GraphQL API and official MCP                                           | GitHub matches Matt's built-in path; Linear requires a recorded custom adapter             |
+| Beads bridge          | Official `bd github pull`, `push`, `sync`, and `status`               | Richer `bd linear` mapping and sync controls                           | Both are viable; Linear is richer, but GitHub has the selective bridge this workflow needs |
+| Code linkage          | Issues, PRs, commits, Actions, and Projects share one platform        | Strong official GitHub integration                                     | GitHub removes an integration boundary                                                     |
+| Long-form knowledge   | Repository Markdown, issue bodies, discussions, and wikis             | Issue/project documents                                                | Keep Notion for personal research rather than choosing a tracker for its docs              |
 
 ## Fit With The Installed Skills
 

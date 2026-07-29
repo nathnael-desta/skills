@@ -11,7 +11,7 @@ Inspect each layer and explain every missing step before changing it.
 | GitHub remote      | Repository       | It identifies the intended GitHub repository      | Add or correct the Git remote                                 |
 | `bd version`       | Machine          | The CLI prints a version                          | Install Beads from its official installation guide            |
 | `bd status`        | Repository       | It finds an active database                       | Initialize this repository with `bd init`                     |
-| Beads GitHub auth  | User environment | `GITHUB_TOKEN` is available                       | Make `GITHUB_TOKEN` available through the user's environment  |
+| Beads GitHub auth  | User environment | An ephemeral `GITHUB_TOKEN` can be resolved       | Reuse `gh auth token` or authenticate with `gh auth login`    |
 | `bd github status` | Repository       | It reports the intended repository and is healthy | Configure only the missing repository or authentication value |
 | Agent integration  | Repository       | Every selected agent discovers Beads              | Run the applicable agent branch from the setup skill          |
 | Matt skills        | Selected scope   | Requested skills appear for every selected agent  | Install through Vercel Skills for the chosen agents and scope |
@@ -33,10 +33,13 @@ npx skills@latest list --global --json
 
 Filter with `--agent` when checking a selected environment. A skill found for
 one agent or scope does not prove that another selected agent can discover it.
+Record each skill's name, agent, scope, discovered path, and source provenance.
 For project installs, inspect `skills-lock.json`; it records the source used for
-updates. Preserve it when the source is a stable shared Git URL. Do not commit an
-absolute local-path source as reproducible project configuration. Do not repair
-installations by manually moving skill folders.
+updates. Classify a shared Git or published-package source as reproducible, an
+absolute local source as development-only, and a manual copy or missing source
+as unmanaged. Do not claim portable setup completion for development-only or
+unmanaged installs. Do not repair installations by manually moving skill
+folders.
 
 ## Install the Beads CLI
 
@@ -65,19 +68,43 @@ installed version lacks that flag. Never reinitialize an active database.
 
 1. Verify the human-facing GitHub path with `gh auth status`; use `gh auth login`
    when needed.
-2. Reuse `GITHUB_TOKEN` when it is already available for Beads. Otherwise ask
-   the user to make `GITHUB_TOKEN` available through their shell, operating
-   system, or secret manager. Do not request its value in chat or write it to a
-   tracked file.
-3. Run `bd github status`. When repository configuration is missing, infer
-   `owner/repo` from the Git remote and store only that non-secret value:
+2. Resolve Beads authentication in this order: an existing `GITHUB_TOKEN`, an
+   ephemeral token from `gh auth token`, a user-managed shell or secret-manager
+   token, then `gh auth login`. Pass the token only to the Beads process:
 
-```bash
-bd config set github.repository "owner/repo"
-bd github status
-```
+   ```bash
+   GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token)}" bd github status
+   ```
+
+   Show this expression in the draft, never the resolved value. Do not request
+   the token in chat, enable shell tracing, persist it in Beads configuration,
+   write it to a tracked file, shell profile, lockfile, log, or report.
+
+3. Inspect current configuration with `bd config list`.
+4. Inspect `bd config get github.owner`, `bd config get github.repo`, and
+   `bd github status`.
+5. Infer owner and repository from the Git remote. Store only missing non-secret
+   values supported by the installed CLI:
+
+   ```bash
+   bd config set github.owner "owner"
+   bd config set github.repo "repo"
+   GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token)}" bd github status
+   ```
 
 Do not pull the repository merely to test the connection.
+
+## Verify storage health
+
+Use `bd where` to identify the active database and storage mode. For embedded
+storage, run `bd version`, `bd where`, `bd status`, and `bd list --json`, and
+confirm that the resolved database exists. Use `bd doctor` only when the
+installed CLI supports it for the active mode. Never use `bd init --force` as a
+routine repair, and never reinitialize a database that existed before setup.
+
+Record the issue count before and after setup. If no database exists initially,
+record that state and require a newly initialized database to contain zero
+issues. Otherwise, setup passes only when the counts match.
 
 ## Resume behavior
 

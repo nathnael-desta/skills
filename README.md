@@ -26,6 +26,14 @@ For a non-interactive OpenCode installation:
 npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent opencode --global -y
 ```
 
+The orchestration skills used by `opencode-agent-flows` install the same way:
+
+```bash
+npx skills@latest add nathnael-desta/skills \
+  --skill browser-control-operations --skill antigravity-delegation \
+  --agent opencode --global -y
+```
+
 From a local clone:
 
 ```bash
@@ -54,8 +62,15 @@ before continuing.
 ## Skills
 
 - `setup-github-beads` - retain the current Matt Pocock GitHub Issues workflow
-  and add Beads as the implementation execution graph with minimal defaults and
-  routing policy.
+  and add Beads as the implementation execution graph plus a scoped, pull-only
+  GitHub planning mirror with minimal defaults and routing policy.
+- `browser-control-operations` - operating policy for driving a browser through
+  Browser Control MCP: filtered JSON output, `page.evaluate` for document work,
+  real Playwright locators instead of sleep-polling, bounded snapshots, visual
+  checkpoints, and human handoff.
+- `antigravity-delegation` - policy for offloading perception-heavy and
+  large-context read-only work to Google Gemini through Antigravity, including
+  what to substitute, what is prohibited, and how to respect the AI Pro quota.
 
 ## Development
 

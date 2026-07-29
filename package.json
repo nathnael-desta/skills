@@ -1,7 +1,7 @@
 {
   "name": "github-beads-skills",
   "version": "0.1.0",
-  "description": "Portable agent skills for GitHub Issues and Beads development workflows",
+  "description": "Portable agent skills for GitHub Issues, Beads development workflows, and OpenCode orchestration",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,9 +21,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "format:check": "prettier --check README.md package.json scripts/validate.mjs docs/**/*.md research/**/*.md setup-github-beads/**/*.md",
-    "test": "node scripts/validate.mjs && npm run format:check",
-    "verify:skills": "npx skills@latest add . --list"
+    "format:check": "prettier --check README.md package.json scripts/**/*.mjs scripts/**/*.md docs/**/*.md research/**/*.md '*/SKILL.md' 'setup-github-beads/**/*.md'",
+    "test": "node scripts/validate.mjs && node scripts/test-setup-github-beads.mjs && npm run format:check",
+    "verify:skills": "npx skills@latest add . --list",
+    "format": "prettier --write README.md package.json '*/SKILL.md'"
   },
   "devDependencies": {
     "prettier": "3.6.2"
@@ -33,5 +34,13 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "keywords": [
+    "agent-skills",
+    "opencode",
+    "beads",
+    "github-issues",
+    "browser-control",
+    "antigravity"
+  ]
 }

@@ -7,6 +7,7 @@ idea
   -> Wayfinder decisions
   -> feature specification
   -> GitHub tracer tickets
+  -> scoped pull-only Beads planning mirror
   -> user selects one implementation issue
   -> selective GitHub pull
   -> one parent Bead
@@ -23,6 +24,20 @@ The installed Matt skills remain responsible for publishing Wayfinder maps and
 decision tickets, specifications, and tracer tickets there. Their behavior is
 not reproduced by this overlay.
 
+When the user wants a complete local task view, refresh the chosen GitHub roots:
+
+```bash
+node scripts/refresh-beads-plan.mjs <issue-url-or-number> [...]
+bd list --tree --limit 0
+```
+
+The refresh recursively includes GitHub sub-issues and blocking prerequisites,
+then marks every mirrored item `phase:mirror` and maps and Wayfinder items
+`phase:planning`. This is a local, pull-only view, not a second planning
+authority. Agents must exclude both labels from every unattended ready query,
+including `bd ready --parent <id> --exclude-label phase:mirror
+--exclude-label phase:planning`.
+
 The user controls which GitHub implementation issue enters Beads. Do not choose,
 import, or start one without explicit selection or authorization to select
 autonomously. If the user asks what to do next, inspect GitHub and recommend
@@ -38,7 +53,8 @@ from persistent dependencies, claims, discoveries, or handoffs.
 After the user has authorized a GitHub issue, each fresh implementation session:
 
 1. Refresh that GitHub parent selectively.
-2. Inspect the selected parent or `bd ready --parent <parent-id>` when it has
+2. Inspect the selected parent or `bd ready --parent <parent-id>
+--exclude-label phase:mirror --exclude-label phase:planning` when it has
    descendants.
 3. Claim one ready item atomically.
 4. Follow the repository's implementation, testing, and review workflow. Use
@@ -84,7 +100,9 @@ product discussion, scheduling, or separate release approval.
 
 ## Sync Rules
 
-Use `bd github pull <issue-url>` to selectively refresh the parent. Use the
-GitHub operations already defined by the upstream issue-tracker policy for
-human-visible updates. Do not continuously synchronize both systems, perform
-unscoped pulls or pushes, or push Beads-only descendants to GitHub.
+Use `node scripts/refresh-beads-plan.mjs <issue-url-or-number> [...]` to refresh
+the selected planning scope or `bd github pull <issue-url>` to refresh one
+authorized implementation parent. Use the GitHub operations already defined by
+the upstream issue-tracker policy for human-visible updates. Do not continuously
+synchronize both systems, perform unscoped pulls or pushes, or push Beads-only
+descendants to GitHub.

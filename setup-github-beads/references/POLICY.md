@@ -11,7 +11,8 @@ issue operations.
 ## GitHub + Beads routing
 
 GitHub Issues is the human-visible planning and approval surface. Beads is the
-implementation execution graph. They are not interchangeable mirrors.
+local execution graph and a pull-only viewer for selected GitHub planning
+scopes. GitHub remains the source of truth.
 
 Completion mode: `{review|auto-complete}`
 
@@ -26,14 +27,33 @@ Completion mode: `{review|auto-complete}`
 
 ### Route by operation
 
-| Work                                                               | Authority     |
-| ------------------------------------------------------------------ | ------------- |
-| Product maps, decision tickets, specifications, and tracer tickets | GitHub Issues |
-| Human priority, discussion, approval, and final status             | GitHub Issues |
-| Implementation subtasks, claims, discoveries, and handoffs         | Beads         |
+| Work                                                               | Authority                             |
+| ------------------------------------------------------------------ | ------------------------------------- |
+| Product maps, decision tickets, specifications, and tracer tickets | GitHub Issues; pull-only Beads mirror |
+| Human priority, discussion, approval, and final status             | GitHub Issues                         |
+| Implementation subtasks, claims, discoveries, and handoffs         | Beads                                 |
 
 The repository's configured Matt skills continue publishing their artifacts to
-GitHub. Do not duplicate those artifacts in Beads during planning.
+GitHub. Beads may mirror them for local browsing but must not edit, close, or
+push those GitHub-owned planning items.
+
+### Browse a planning scope
+
+1. The user identifies the GitHub feature, map, or other root to view. Run
+   `node scripts/refresh-beads-plan.mjs <issue-url-or-number> [...]` with every
+   selected root. The script recursively pulls its GitHub sub-issues and
+   blocking prerequisites, then recreates their parent and blocking edges
+   locally.
+2. Browse the complete selected scope with `bd list --tree --limit 0`.
+3. Every mirrored item receives `phase:mirror`; planning items also receive
+   `phase:planning`. Always use `bd ready --exclude-label phase:mirror
+--exclude-label phase:planning` for unattended execution, including
+   parent-scoped ready queries.
+4. The refresh is pull-only. Do not run `bd github push`, `bd github sync`, or
+   an unscoped GitHub pull to refresh planning visibility.
+
+The script deliberately requires explicit roots. Do not import the entire
+repository backlog merely to populate the Beads viewer.
 
 ### Start an implementation issue
 
@@ -44,13 +64,17 @@ GitHub. Do not duplicate those artifacts in Beads during planning.
    or refresh exactly one parent Bead. Never pull the whole repository as a
    routine start step.
 4. Find the parent by its GitHub `external_ref`; do not create a duplicate.
-5. Create Beads descendants only for execution work below the GitHub ticket's
+5. Promote an explicitly selected mirror with `bd label remove <id>
+phase:mirror` and `bd label add <id> phase:execution`. Future planning
+   refreshes preserve the local state of `phase:execution` items.
+6. Create Beads descendants only for execution work below the GitHub ticket's
    existing acceptance criteria. A ticket already published by a Matt skill
    remains a GitHub issue, not a Beads-only replacement.
 
 ### Execute
 
-- Query only `bd ready --parent <parent-bead-id>` when descendants exist;
+- Query only `bd ready --parent <parent-bead-id> --exclude-label phase:mirror
+--exclude-label phase:planning` when descendants exist;
   otherwise claim and execute the selected parent.
 - Atomically claim one issue before work.
 - Follow the repository's coding, testing, review, and commit workflow. Use
@@ -68,8 +92,10 @@ declared above.
 ### Sync safety
 
 - GitHub owns human-visible titles, requirements, priority, and status.
-- Beads owns implementation-only descendants and their execution state.
-- Use selective pulls and the surrounding tracker policy for GitHub updates.
+- Beads owns implementation-only descendants and their execution state, plus
+  read-only local mirrors of selected GitHub planning items.
+- Use the refresh script for scoped, pull-only planning visibility and the
+  surrounding tracker policy for GitHub updates.
 - Do not run an unscoped GitHub pull or push as a routine workflow step.
 - Do not push Beads-only descendants to GitHub; create a GitHub issue separately
 only when a discovery needs human prioritization or discussion.
