@@ -74,6 +74,11 @@ before continuing.
 - `open-design-archetypes` - plan and propagate reusable Open Design archetype
   packages between a design project and a production codebase, with route
   mapping, coverage matrices, and parity gates.
+- `open-design-archetype-authoring` - create a static-data Open Design baseline
+  and companion frames from a production Reference Route, then hand it to a
+  human for redesign.
+- `open-design-archetype-propagation` - propagate an approved redesigned Open
+  Design artifact into production while preserving behavior and verifying parity.
 - `open-design-implementation` - implement or refine production UI from an
   Open Design artifact with exact source parity while preserving production
   behavior.
