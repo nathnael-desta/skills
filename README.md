@@ -15,8 +15,8 @@ From the repository's GitHub location:
 npx skills@latest add nathnael-desta/skills --global
 ```
 
-Because this repository exposes one skill, the installer selects
-`setup-github-beads` automatically. OpenCode is included through the always-on
+Because this repository exposes multiple skills, the installer lets you choose
+which workflows to install. OpenCode is included through the always-on
 Universal `.agents/skills` target; select any additional agent-specific targets
 you also want, then confirm the installation.
 
@@ -71,6 +71,12 @@ before continuing.
 - `antigravity-delegation` - policy for offloading perception-heavy and
   large-context read-only work to Google Gemini through Antigravity, including
   what to substitute, what is prohibited, and how to respect the AI Pro quota.
+- `open-design-archetypes` - plan and propagate reusable Open Design archetype
+  packages between a design project and a production codebase, with route
+  mapping, coverage matrices, and parity gates.
+- `open-design-implementation` - implement or refine production UI from an
+  Open Design artifact with exact source parity while preserving production
+  behavior.
 
 ## Development
 
