@@ -50,6 +50,70 @@ Before editing, map source elements to production elements. Label each differenc
   the registry.
 - **Missing dependency**: must be resolved before claiming completion.
 
+## Token And Component Contract
+
+Treat every archetype as a reusable system specimen, not a page to repaint in
+isolation. Before writing page-local markup:
+
+1. Match each visual value to an existing primitive or semantic token. Promote a
+   missing token at the design-system source of truth before adding a one-off
+   value. Components consume semantic tokens; they do not introduce raw colors,
+   arbitrary spacing, or page-specific typography.
+2. Match repeated structure to an existing shared component or Pattern. If the
+   artifact introduces a structure that another route could reasonably reuse,
+   extract it into the smallest useful shared component before implementing the
+   page. Tables, filters, headers, badges, tabs, pagination, stat groups, and
+   loading/empty/error states are Patterns, not page-local markup.
+3. Keep the component API separate from the page data contract. Shared
+   components receive typed content, state, slots, and callbacks; they do not
+   know the route's API, permissions, legal content, or domain-specific query.
+4. Implement the component's supported states and responsive behavior at the
+   shared source of truth so mapped archetype routes inherit the decision rather
+   than copying it.
+
+A page-local implementation is acceptable only when the structure is genuinely
+one-off or when a documented missing dependency blocks extraction. Record that
+exception as an intentional deviation and name the future component candidate.
+
+## Upward Design-System Synchronization
+
+Propagation is bidirectional. After mapping the approved artifact, identify
+reusable discoveries that should be promoted into the attached Behigamlak design
+system. Upward promotion includes new or corrected tokens, shared component
+contracts, Patterns, variants, and their state/responsive specifications. It
+does not include production data, API behavior, permissions, legal copy, or
+domain-specific business rules.
+
+Use this gate for every candidate:
+
+- It has at least two credible consumers, or a clear system-level reason to
+  exist before a second consumer is available.
+- Its light/dark, responsive, focus, disabled, loading, empty, and error
+  behavior is specified where applicable.
+- Its typography, spacing, color, border, elevation, and motion values resolve
+  through semantic tokens.
+- Its API is reusable and data/domain agnostic.
+- Its accessibility and localization behavior are explicit, including Amharic
+  wrapping and density when text is present.
+- It has at least one production consumer after implementation.
+
+Create or update the upstream design-system contribution through Open Design,
+then record the result in a propagation manifest or registry entry containing:
+
+- Promoted token, component, Pattern, or variant
+- Source artifact and design-system project
+- Production consumer routes
+- Covered themes, breakpoints, and states
+- Validation evidence and any intentional deviations
+- Status: `proposed`, `accepted`, `implemented`, or `rejected`
+
+Do not silently mark an upstream candidate accepted. If the design-system
+workflow requires a human approval step, leave it `proposed`, report the exact
+Open Design file and candidate, and do not claim complete system propagation
+until the decision is recorded. The downward production implementation may use
+an already-approved shared contract; a new unapproved contract is a completion
+blocker unless the user explicitly accepts the documented deviation.
+
 Preserve production authority over:
 
 - APIs, schemas, persistence, and error handling
@@ -61,12 +125,17 @@ Preserve production authority over:
 ## Implement In Dependency Order
 
 1. Promote or correct primitive and semantic tokens for both themes.
-2. Correct shared Shell and Pattern components.
-3. Port the Reference Route structure and responsive rules.
-4. Connect real data, API calls, permissions, routes, localization, and actions.
-5. Propagate only the approved patterns to representative mapped variants.
-6. Preserve loading, empty, error, permission, read-only, and success behavior.
-7. Update the registry with mapped routes, deviations, and implementation status.
+2. Promote or correct shared Shell and Pattern components, including reusable
+   states and responsive rules.
+3. Record upward candidates and their gate status in the design-system
+   contribution or propagation manifest.
+4. Port the Reference Route using the shared tokens and components; extract any
+   newly repeated structure before continuing page implementation.
+5. Connect real data, API calls, permissions, routes, localization, and actions.
+6. Propagate only the approved patterns to representative mapped variants.
+7. Preserve loading, empty, error, permission, read-only, and success behavior.
+8. Update the registry with mapped routes, deviations, upstream contribution
+   statuses, and implementation status.
 
 Prefer the smallest shared component or token correction. Do not create page-local
 overrides when the approved decision belongs in a shared Pattern or Shell.
@@ -102,6 +171,10 @@ the package is not approved.
 - The Reference Route and representative mapped routes use the approved visual contract.
 - Production APIs, permissions, routing, legal content, localization, and business behavior are preserved.
 - Shared tokens, Shell, and Patterns are updated at the correct source of truth.
+- The route uses shared semantic tokens and reusable components; repeated
+  structure is not copied into page-local markup.
+- Upward design-system candidates have a recorded status and evidence, and every
+  accepted candidate has a queryable propagation manifest entry.
 - Companion states and responsive behavior are implemented or explicitly marked as intentional deviations.
 - Relevant static, behavioral, and visual checks pass.
 - The registry records the package as `implemented` or `approved`, never `approved` while parity gaps remain.

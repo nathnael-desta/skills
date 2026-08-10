@@ -17,11 +17,23 @@
 ## Implementation
 
 - [ ] Shared tokens corrected first
+- [ ] Every visual value resolves through a primitive or semantic token
 - [ ] Shared Shell and Patterns corrected before page-local markup
+- [ ] Repeated or reusable structure extracted into a shared component or Pattern
+- [ ] Shared component APIs are data/domain agnostic and preserve production behavior at the route boundary
 - [ ] Canonical route implemented
 - [ ] Representative variants implemented
 - [ ] Loading, empty, error, permission, read-only, and success states covered
 - [ ] Registry status and deviations updated
+
+## Upward Synchronization
+
+- [ ] New or corrected tokens, components, and Patterns classified as upstream candidates
+- [ ] Each candidate passes the reuse/system-level, state, token, accessibility, and localization gate
+- [ ] Upstream contribution created or updated in the Open Design design-system project
+- [ ] Every candidate has a manifest/registry status: proposed, accepted, implemented, or rejected
+- [ ] Accepted candidates name their source artifact and production consumer routes
+- [ ] Unapproved candidates are reported as blockers or documented intentional deviations
 
 ## Verification
 
@@ -33,3 +45,4 @@
 - [ ] Focus, hover, selected, disabled, and primary interactions checked
 - [ ] Bilingual density checked when applicable
 - [ ] Every visible difference fixed or explained
+- [ ] Final propagation report states what propagated upward, what propagated downward, and what remains pending
