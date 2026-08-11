@@ -1,0 +1,85 @@
+{
+  "production": {
+    "canonicalRoute": "",
+    "package": "",
+    "referenceSource": [],
+    "mappedRoutes": [],
+    "sourceClosure": {
+      "pages": [],
+      "layouts": [],
+      "components": [],
+      "apis": [],
+      "permissions": [],
+      "localization": [],
+      "tokens": [],
+      "fonts": [],
+      "assets": [],
+      "responsiveRules": []
+    }
+  },
+  "featureLedger": [
+    {
+      "id": "feature-001",
+      "name": "",
+      "status": "implemented",
+      "source": "",
+      "behaviorBoundary": "",
+      "requiredFrameIds": []
+    }
+  ],
+  "behaviorContract": {
+    "actions": [],
+    "navigation": [],
+    "apiBehavior": [],
+    "permissionRules": [],
+    "notifications": [],
+    "localizationRules": [],
+    "productionOwned": []
+  },
+  "variants": [
+    {
+      "id": "variant-001",
+      "name": "",
+      "route": "",
+      "scope": "",
+      "featureIds": []
+    }
+  ],
+  "states": [
+    {
+      "id": "state-001",
+      "name": "",
+      "source": "",
+      "featureIds": [],
+      "applicableVariants": []
+    }
+  ],
+  "fixtures": {
+    "source": "deterministic-invented-fixtures",
+    "ids": [],
+    "languages": [],
+    "fixedDates": [],
+    "dataShapes": [],
+    "sensitiveDataExcluded": true
+  },
+  "frameMatrix": [
+    {
+      "id": "frame-001",
+      "label": "",
+      "viewport": "",
+      "theme": "",
+      "variantIds": [],
+      "stateIds": [],
+      "featureIds": [],
+      "authoringOnlyControls": []
+    }
+  ],
+  "intentionalDeviations": [],
+  "openQuestions": [],
+  "handoff": {
+    "artifactPath": "",
+    "designSystem": "",
+    "productionParityClaim": false,
+    "nextStep": "/open-design-archetype-propagation"
+  }
+}
