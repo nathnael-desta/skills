@@ -60,21 +60,13 @@ Report:
 1. **Canonical spec issue**: Title, issue number, and URL.
 2. **Approved tickets & Task Graph**: Titles, references, blockers, and readiness state.
 3. **First ready ticket**: The initial unblocked ticket to claim.
-4. **Base Branch & Lineage**: The exact git branch / commit to branch the new implementation from (e.g. `dev`, or the active feature/spec branch if continuing previous unmerged work).
-5. **Target Worktree & Working Directory**: The exact directory path where the implementer should work, directing the agent to set its terminal working directory (`Cwd`) to that worktree path so work continues seamlessly without lost state.
-6. **Copy-Pasteable Prompt for New Agent Session**: Always provide a standalone, copy-pasteable prompt block formatted with all required context, base branch, worktree path, and command ready for the user to give directly to a new agent session.
+4. **Copy-Pasteable Prompt for New Agent Session**: Always provide a standalone, concise copy-pasteable prompt block with the spec command, base branch/commit, and working directory:
 
-Example Handoff Prompt:
 ```text
 /implement-spec the spec is on issue number #<spec-number>
 
 Base Branch: <branch-name> (commit <hash>)
 Working Directory: <path/to/worktree>
-Task Graph:
-- #<ticket-1> (Ready)
-- #<ticket-2> (Blocked by #<ticket-1>)
-...
-Ensure all implementer subagents branch from <branch-name> and use the worktree directory as Cwd.
 ```
 
 Do not start implementation in this skill.
