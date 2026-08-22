@@ -60,13 +60,13 @@ Report:
 1. **Canonical spec issue**: Title, issue number, and URL.
 2. **Approved tickets & Task Graph**: Titles, references, blockers, and readiness state.
 3. **First ready ticket**: The initial unblocked ticket to claim.
-4. **Copy-Pasteable Prompt for New Agent Session**: Always provide a standalone, concise copy-pasteable prompt block with the spec command, base branch/commit, and working directory:
+4. **Copy-Pasteable Prompt for New Agent Session**: Always provide a standalone, concise copy-pasteable prompt block with the spec command, base branch/commit, and explicit working directory instruction:
 
 ```text
 /implement-spec the spec is on issue number #<spec-number>
 
 Base Branch: <branch-name> (commit <hash>)
-Working Directory: <path/to/worktree>
+Working Directory: <path/to/worktree> (use this path as your working directory / Cwd for all operations)
 ```
 
 Do not start implementation in this skill.
