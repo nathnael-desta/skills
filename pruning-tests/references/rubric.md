@@ -26,6 +26,7 @@ You audit existing tests and give a verdict per test; you edit nothing. Goal: a 
 
 - Mocks at system boundaries are fine and often the point. "The payment/notification call was made with X" is behaviour.
 - Faking the project's own services or modules is the implementation-coupled smell, unless the faked thing itself wraps a boundary.
+- A cheap-model pass over-deletes: when the call is close between `delete` and `keep`, or `merge` and `keep`, say `keep` with confidence `low` and let the second pass decide.
 - High-stakes areas: default to `keep` or `rewrite`; `delete` only for an exact duplicate.
 - A regression test for a past bug (name or docstring mentions an issue, "regression", "used to") is `keep` unless clearly a duplicate.
 - Do not judge by length or style. A long test that pins real behaviour is `keep`.
