@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""Build a side-scrolling walkthrough of numbered screenshots from a JSON spec.
+
+usage: python3 -I build_report.py spec.json out.html            # standalone report
+       python3 -I build_report.py spec.json embed.html --embed    # T3 html_render
+
+spec = {"title": str, "note": str,
+        "flows": [{"title": str, "status": str, "steps": [step, ...]}],  # status optional
+        "asks": [{"quote": str, "on": str, "did": str, "flow": int|None, "status": str}],
+        # asks = the user's requests: "quote" = their exact words, "on" = what it was attached to
+        # (optional), "did" = what you did, "flow" = 1-based section whose screenshots show it;
+        # it is printed inside that section. flow None = a question or non-visual ask: it is NOT
+        # in the report, so answer it in the chat, quoting the words.
+        "limits": [str]}          # limits = honest "not verified / known gaps"
+step = {"img": "/abs.png", "caption": str}                        # one screenshot
+     | {"before": "/abs.png", "after": "/abs.png", "caption": str}  # drag-to-compare
+
+Standalone: one self-contained file (images as base64 JPEG). Clicking a shot opens a
+full-window viewer (arrows / Esc, click to zoom 1:1, drag to pan). Linked from a chat
+reply as a plain absolute path to the .html, T3 opens it in its side browser panel.
+Nothing here enters the model's context: do not Read the output.
+
+--embed: small JPEGs next to the output (embed-img/NN.jpg) and a page that references
+them by LITERAL absolute path in src="...". T3's html_render inlines only literal
+absolute image paths (a regex over the HTML); a path assembled in JS stays broken.
+In the chat frame a click turns on a magnifier lens (+ / - power, Esc off);
+before/after pairs slide.
+
+Colours: both modes use T3's theme variable names. The embed gets T3's live values;
+the standalone file defines neutral light/dark fallbacks for the same names. Never
+hardcode a colour anywhere else.
+"""
+import base64, html, io, json, os, sys
+from PIL import Image
+
+E = html.escape
+
+# Fallback values for T3's theme variables, standalone report only. In the embed T3
+# injects these itself; defining them there would override the user's theme.
+FALLBACK_VARS = """:root{color-scheme:light dark;--background:#fafafa;--foreground:#18181b;--card:#fff;--card-foreground:#18181b;--muted-foreground:#71717a;--border:#e4e4e7;--ring:#3b82f6;--accent:#2563eb;--accent-foreground:#fff;--success:#16a34a;--warning:#d97706;--destructive:#dc2626;--radius:8px;--font-sans:system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root{--background:#0c0c0f;--foreground:#f4f4f5;--card:#17171c;--card-foreground:#f4f4f5;--muted-foreground:#a1a1aa;--border:#2a2a32;--ring:#60a5fa;--accent:#60a5fa;--accent-foreground:#0c0c0f;--success:#4ade80;--warning:#fbbf24;--destructive:#f87171}}
+body{background:var(--background);padding:24px;max-width:1400px;margin:0 auto}
+h1{font-size:26px;margin:0 0 8px}.note{color:var(--muted-foreground);margin:0 0 24px}"""
+
+CSS = """body{margin:0;font-family:var(--font-sans);color:var(--foreground)}
+.flow{margin:0 0 30px}
+.flow h3{font-size:20px;font-weight:700;margin:0 0 2px;color:var(--accent,var(--primary))}
+.hint{font-size:13px;color:var(--muted-foreground);margin:0 0 12px}
+.row{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:10px;scrollbar-width:thin}
+.card{flex:0 0 min(92%,1000px);scroll-snap-align:start;margin:0;padding:12px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);box-sizing:border-box}
+.card.tall{flex-basis:min(80%,380px)}
+.card figcaption{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.55;margin:0 0 12px;min-height:3.1em}
+.n{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent,var(--primary));color:var(--accent-foreground,var(--primary-foreground));font-weight:700;font-size:13px;display:grid;place-items:center;margin-top:1px}
+.shot{border-radius:var(--radius);overflow:hidden;cursor:zoom-in;user-select:none}
+.shot img{width:100%;display:block;-webkit-user-drag:none}
+ul{font-size:14px;line-height:1.6;color:var(--muted-foreground);padding-left:20px}
+.st{display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin-left:10px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--c);color:var(--foreground)}
+.st::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}"""
+
+# Issue status -> theme colour. Colour sits on the border and dot, never a fill.
+STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--warning",
+          "not fixed": "--destructive", "not reproduced": "--muted-foreground"}
+
+# Embed: click a shot to turn on a magnifier lens that follows the pointer; click again,
+# Esc or leaving the shot turns it off, and + / - change the power. History: in-place
+# zoom cropped the shot (the frame is narrower than it) and fought the wheel; an
+# always-on hover lens got in the way. On-demand lens is what stuck. For a wider view
+# the user hovers the embed and uses T3's own "Open in panel" button.
+EMBED_CSS = """.shot{position:relative;cursor:zoom-in}.shot.on{cursor:none}
+.lens{position:absolute;border-radius:var(--radius);border:2px solid var(--ring);box-shadow:0 8px 28px color-mix(in srgb,var(--foreground) 30%,transparent);background-repeat:no-repeat;background-color:var(--card);pointer-events:none;display:none;z-index:3}
+.shot.on .lens{display:block}
+.lens b{position:absolute;right:6px;bottom:6px;font:700 11px var(--font-sans);padding:1px 6px;border-radius:999px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border)}"""
+EMBED_JS = """(()=>{let K=2.5,on=null;const off=()=>{if(on)on.classList.remove('on');on=null};
+const move=(s,e)=>{const im=s.querySelector('img'),l=s.querySelector('.lens'),r=im.getBoundingClientRect(),W=Math.min(420,r.width*.55),H=W*.62,x=e.clientX-r.left,y=e.clientY-r.top;
+Object.assign(l.style,{width:W+'px',height:H+'px',left:Math.min(Math.max(x-W/2,0),r.width-W)+'px',top:Math.min(Math.max(y-H/2,0),r.height-H)+'px',backgroundImage:'url("'+im.currentSrc+'")',backgroundSize:r.width*K+'px auto',backgroundPosition:(W/2-x*K)+'px '+(H/2-y*K)+'px'});l.firstChild.textContent=K+'\u00d7'};
+document.querySelectorAll('.shot:not(.cmp)').forEach(s=>{const l=document.createElement('div');l.className='lens';l.append(document.createElement('b'));s.append(l);let last;
+s.addEventListener('click',e=>{const was=on===s;off();if(!was){on=s;s.classList.add('on');move(s,e)}last=e});
+s.addEventListener('pointermove',e=>{last=e;if(on===s)move(s,e)});s.addEventListener('pointerleave',()=>{if(on===s)off()});
+s._k=()=>last&&move(s,last)});
+document.addEventListener('keydown',e=>{if(!on)return;if(e.key==='Escape')off();else if(e.key==='+'||e.key==='='){K=Math.min(5,K+.5);on._k()}else if(e.key==='-'){K=Math.max(1.5,K-.5);on._k()}})})();"""
+
+# Before/after: both shots stacked, the "after" clipped by a slider. Same route, same
+# viewport, same state, or the two will not line up.
+CMP_CSS = """.cmp{position:relative;overflow:hidden;border-radius:var(--radius);cursor:ew-resize}.cmp img{width:100%;display:block}
+.cmp .after{position:absolute;inset:0;height:100%;object-fit:cover;object-position:top;clip-path:inset(0 0 0 var(--x,50%))}
+.cmp .bar{position:absolute;top:0;bottom:0;left:var(--x,50%);width:2px;background:var(--ring);pointer-events:none}
+.cmp .tag{position:absolute;top:8px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);pointer-events:none}
+.cmp .tb{left:8px}.cmp .ta{right:8px}
+.cmp input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize}"""
+CMP_JS = """document.querySelectorAll('.cmp input').forEach(i=>i.addEventListener('input',()=>i.parentNode.style.setProperty('--x',i.value+'%')));"""
+
+# Standalone: a proper full-window viewer.
+VIEWER_CSS = """.lb{position:fixed;inset:0;z-index:9;display:none;flex-direction:column;background:var(--background)}
+.lb.open{display:flex}.lb header{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);font-size:15px}
+.lb header .cap{flex:1;min-width:0}.lb button{font:inherit;min-width:44px;min-height:44px;border-radius:var(--radius);border:1px solid var(--border);background:var(--card);color:var(--foreground);cursor:pointer}
+.lb .stage{flex:1;overflow:auto;display:flex;cursor:zoom-in}.lb .stage img{margin:auto;max-width:100%;max-height:100%;display:block}
+.cmp .tag{pointer-events:auto;z-index:2;cursor:zoom-in}.lb .stage.full{cursor:grab}.lb .stage.full img{max-width:none;max-height:none}"""
+VIEWER_HTML = """<div class=lb role=dialog aria-modal=true><header><button data-a=prev aria-label="Previous">&larr;</button><span class=cap></span><button data-a=zoom>1:1</button><button data-a=next aria-label="Next">&rarr;</button><button data-a=close aria-label="Close">&times;</button></header><div class=stage><img alt=""></div></div>"""
+VIEWER_JS = """(()=>{const shots=[...document.querySelectorAll('.shot img')],tags=[...document.querySelectorAll('.cmp .tag')],lb=document.querySelector('.lb'),st=lb.querySelector('.stage'),im=st.querySelector('img'),cap=lb.querySelector('.cap');let i=0,d=null;
+const show=n=>{i=(n+shots.length)%shots.length;im.src=shots[i].src;const f=shots[i].closest('figure');cap.textContent=f.closest('section').querySelector('h3').textContent+' \\u2014 '+f.querySelector('figcaption').textContent+(shots[i].dataset.v?' ('+shots[i].dataset.v+')':'');st.classList.remove('full');lb.classList.add('open')};
+const zoom=()=>st.classList.toggle('full');
+shots.forEach((s,n)=>{if(!s.dataset.v)s.closest('.shot').addEventListener('click',()=>show(n))});tags.forEach(t=>t.addEventListener('click',()=>show(shots.indexOf(t.parentNode.querySelector(t.classList.contains('tb')?'.before':'.after')))));
+lb.addEventListener('click',e=>{const a=e.target.closest('button')?.dataset.a;if(a==='prev')show(i-1);if(a==='next')show(i+1);if(a==='zoom')zoom();if(a==='close')lb.classList.remove('open')});
+st.addEventListener('pointerdown',e=>{d={x:e.clientX,y:e.clientY,l:st.scrollLeft,u:st.scrollTop,m:false}});
+st.addEventListener('pointermove',e=>{if(!d||!st.classList.contains('full'))return;const dx=e.clientX-d.x,dy=e.clientY-d.y;if(Math.abs(dx)+Math.abs(dy)>4)d.m=true;st.scrollLeft=d.l-dx;st.scrollTop=d.u-dy});
+st.addEventListener('pointerup',()=>{if(d&&!d.m)zoom();d=null});
+document.addEventListener('keydown',e=>{if(!lb.classList.contains('open'))return;if(e.key==='Escape')lb.classList.remove('open');if(e.key==='ArrowLeft')show(i-1);if(e.key==='ArrowRight')show(i+1)})})();"""
+
+
+MIN_WIDTH = 1100  # a 1280-wide capture is the norm; anything below this will look soft
+TALL_MIN_WIDTH = 720  # a phone shot is shown 380px wide, so 2x that is sharp
+
+
+def is_tall(path):
+    """A portrait screenshot (a phone screen). It is shown at phone width, not the
+    full card width, or a 1080x2340 shot fills several screens of scrolling."""
+    w, h = Image.open(path).size
+    return h > w * 1.3
+
+
+def check_resolution(spec):
+    """Refuse low-resolution screenshots. A 640x400 PNG shown at the card's ~950px
+    width is upscaled ~1.5x and reads as blur, and nothing downstream can fix that.
+    Set "allow_low_res": true in the spec only for a deliberately small capture."""
+    low = []
+    for flow in spec["flows"]:
+        for st in flow["steps"]:
+            for k in ("img", "before", "after"):
+                if k in st:
+                    w = Image.open(st[k]).width
+                    if w < (TALL_MIN_WIDTH if is_tall(st[k]) else MIN_WIDTH):
+                        low.append(f"{st[k]} is {w}px wide")
+    if low and not spec.get("allow_low_res"):
+        sys.exit("low-resolution screenshots (need >= %dpx wide, or %dpx for a portrait phone shot), "
+                 "retake them (see SKILL.md 'Sharp screenshots'):\n  " % (MIN_WIDTH, TALL_MIN_WIDTH) + "\n  ".join(low))
+
+
+def jpeg(path, width, quality):
+    im = Image.open(path).convert("RGB")
+    if im.width > width:
+        im = im.resize((width, int(im.height * width / im.width)))
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=quality)
+    return buf.getvalue()
+
+
+def build(spec, out_path, embed):
+    check_resolution(spec)
+    img_dir = os.path.join(os.path.dirname(os.path.abspath(out_path)), "embed-img")
+    if embed:
+        os.makedirs(img_dir, exist_ok=True)
+    head = CSS + CMP_CSS + (EMBED_CSS if embed else FALLBACK_VARS + VIEWER_CSS)
+    out = [f"<!doctype html><html><head><meta charset=utf-8><title>{E(spec['title'])}</title><style>{head}</style></head><body>"]
+    if not embed:
+        out.append(f"<h1>{E(spec['title'])}</h1>")
+        if spec.get("note"):
+            out.append(f"<p class=note>{E(spec['note'])}</p>")
+
+    asks = spec.get("asks") or []
+    nflows = len(spec["flows"])
+    bad = [a for a in asks if not a.get("quote") or not a.get("did")
+           or (a.get("flow") is not None and not 1 <= a["flow"] <= nflows)]
+    if bad:
+        sys.exit("asks need 'quote', 'did' and a 'flow' of 1..%d (or null): %r" % (nflows, bad))
+    if asks:
+        for i in range(1, nflows + 1):
+            if not any(a.get("flow") == i for a in asks):
+                print(f"warning: section {i} answers no ask in 'asks'", file=sys.stderr)
+        for a in asks:
+            if a.get("flow") is None:
+                print(f"not in the report, discuss in chat: {a['quote']!r}", file=sys.stderr)
+        out.append("<style>.ask{margin:0 0 12px;padding:2px 0 2px 12px;border-left:3px solid var(--accent,var(--primary))}"
+                   ".ask q{display:block;font-weight:600}.ask small{color:var(--muted-foreground)}.ask p{margin:2px 0 0}</style>")
+
+    def ask_html(fi):
+        return "".join("<div class=ask>" + (f"<small>on: {E(a['on'])}</small>" if a.get("on") else "")
+                       + f"<q>{E(a['quote'])}</q><p>{E(a['did'])}"
+                       + (f" &middot; <b>{E(a['status'])}</b>" if a.get("status") else "") + "</p></div>"
+                       for a in asks if a.get("flow") == fi)
+
+    def src(path, name):
+        # Up to 1600px so the 1:1 view in the standalone report has detail to show.
+        data = jpeg(path, 1600, 85)
+        if not embed:
+            return "data:image/jpeg;base64," + base64.b64encode(data).decode()
+        dst = os.path.join(img_dir, f"{name}.jpg")
+        open(dst, "wb").write(data)
+        return dst
+
+    n = 0
+    for fi, flow in enumerate(spec["flows"], 1):
+        steps = flow["steps"]
+        cmp = any("before" in s for s in steps)
+        tip = (" &middot; drag across a shot to compare before and after" if cmp
+               else " &middot; click a screenshot to magnify, + / &minus; to change" if embed else " &middot; click a screenshot to enlarge")
+        st = flow.get("status")
+        if st and st not in STATUS:
+            sys.exit(f"unknown status {st!r} in {flow['title']!r}; use one of {sorted(STATUS)}")
+        chip = f'<span class=st style="--c:var({STATUS[st]})">{E(st)}</span>' if st else ""
+        out.append(f'<section class=flow id=flow{fi}><h3>{fi} &middot; {E(flow["title"])}{chip}</h3><p class=hint>{len(steps)} step{"s" * (len(steps) != 1)}{" &rarr; scroll sideways" if len(steps) > 1 else ""}{tip}</p>{ask_html(fi)}<div class=row>')
+        for i, s in enumerate(steps, 1):
+            n += 1
+            if "before" in s:
+                shot = (f'<div class="shot cmp"><img class=before data-v=before src="{src(s["before"], f"{n:02d}-before")}" alt="Before">'
+                        f'<img class=after data-v=after src="{src(s["after"], f"{n:02d}-after")}" alt="After">'
+                        '<span class=bar></span><span class="tag tb">Before</span><span class="tag ta">After</span>'
+                        '<input type=range min=0 max=100 value=50 aria-label="Before / after"></div>')
+            else:
+                shot = f'<div class=shot><img src="{src(s["img"], f"{n:02d}")}" alt=""></div>'
+            tall = is_tall(s.get("before") or s["img"])
+            out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption>{shot}</figure>')
+        out.append("</div></section>")
+    if spec.get("limits"):
+        out.append("<section class=flow><h3>Not verified / known limits</h3><ul>" + "".join(f"<li>{E(x)}</li>" for x in spec["limits"]) + "</ul></section>")
+    out.append(f"<script>{CMP_JS}</script>")
+    if embed:
+        out.append(f"<script>{EMBED_JS}</script>")
+    else:
+        out.append(f"{VIEWER_HTML}<script>{VIEWER_JS}</script>")
+    out.append("</body></html>")
+    page = "".join(out)
+    open(out_path, "w").write(page)
+    print(f"{n} steps, {len(page)//1024} KB -> {out_path}")
+
+
+if __name__ == "__main__":
+    spec_path, out_path, *flags = sys.argv[1:]
+    build(json.load(open(spec_path)), out_path, "--embed" in flags)
