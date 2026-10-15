@@ -83,6 +83,18 @@ before continuing.
   Open Design artifact with exact source parity while preserving production
   behavior.
 
+- `writing-tests` - rules for deciding whether and how to add a test: name
+  the bug first, extend before adding, mock only at system boundaries, red
+  before green, and report each new test with the bug it catches.
+- `pruning-tests` - audit an existing suite with cheap-model subagents, spot
+  check and mutation-test the delete candidates, and remove tests only with
+  per-file user approval; ships the audit rubric.
+- `speeding-up-ci` - diagnose slow GitHub Actions CI in order: measure, remove
+  duplicate runs and waste, cache, fix slow tests, then shard or buy runners.
+- `reviewing-deploys` - checklist for reviewing a push-to-deploy pipeline:
+  deployed SHA, rollback capture, build fallback, pruning, health gate,
+  migrations, environment protection, and gating on the tree CI passed.
+
 ## Development
 
 ```bash
