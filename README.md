@@ -99,6 +99,11 @@ before continuing.
   capture, deployed SHA, build fallback, pruning, health gate, migrations,
   gating on the tree CI passed) and a shimmed-docker simulation harness for
   the deploy script.
+- `local-ci` - run a pull request's GitHub Actions jobs on this machine and
+  get a verdict you can merge on: the workflow's own commands on the PR merged
+  into its base, a fresh environment per job, and a private Postgres per run, so
+  parallel worktrees don't collide. `act.md` covers act's pitfalls and how to
+  run act safely.
 
 ## Development
 
