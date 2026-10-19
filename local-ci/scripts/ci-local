@@ -250,7 +250,7 @@ class Job:
             log.write(f"\n!! ci-local error: {e}\n")
         finally:
             for name in services:
-                subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+                subprocess.run(["docker", "rm", "-f", "-v", name], capture_output=True)
             self.secs = time.time() - t0
             log.close()
         say(f"  {self.jid:<22} {self.result:<8} {self.secs:6.0f}s  {self.note}")

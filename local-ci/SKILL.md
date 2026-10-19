@@ -72,6 +72,11 @@ otherwise `npm ci --prefer-offline` runs.
   **169s wall** with `-p 3`, against ~4.6 min for GitHub's longest job. Warm per-job times:
   docs 27s, lint 18s, typecheck 74s, backend 151s (pgvector service on a random port),
   frontend 75s.
+- **Resources** for a full run with `-p 3`: peak process memory 3.9 GB (anon, from
+  the cgroup's `memory.stat`), plus ~370 MB for the Postgres container. Disk peaks
+  ~2.2 GB during the run and is released at the end. The lasting cost is the
+  shared caches (uv 12 GB, npm 4 GB), which normal development uses too.
+  A run killed partway leaves its folder in `~/temp/ci-local/runs/`. Delete it by hand.
 - **First run on a cold machine** is slower: Node download plus torch and the other
   wheels into the uv cache. Expect several minutes. A download or lock timeout on
   that run reports ERROR, not FAIL.
