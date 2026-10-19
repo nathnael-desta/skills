@@ -1,0 +1,475 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6"]
+# ///
+"""ci-local: run a GitHub Actions workflow's own `run:` steps natively, per PR.
+
+Answers one question: would this PR's CI pass on GitHub? It does that by
+reproducing what GitHub tests (the PR head merged into its base, from the
+committed tree only), with the versions CI pins (setup-python / setup-uv /
+setup-node `with:` values, the lock files), and by running the commands that
+the workflow file itself lists, so nothing is copied by hand and nothing drifts.
+
+What it does not reproduce is GitHub's plumbing: action versions resolving,
+the workflow schema, the runner image. Use act for PRs that change the
+workflow itself.
+
+Parallel-safe: every run has its own clone, venvs, Postgres container on a
+random port, and log dir. Shared state is limited to the uv and npm download
+caches, which both tools make safe for concurrent use.
+"""
+from __future__ import annotations
+
+import argparse
+import concurrent.futures as cf
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tarfile
+import threading
+import time
+import urllib.request
+from pathlib import Path
+
+import yaml
+
+HOME = Path.home()
+RUNS_ROOT = HOME / "temp" / "ci-local" / "runs"
+TOOLS = HOME / ".cache" / "ci-local"
+print_lock = threading.Lock()
+# Failures that come from this machine or the network, never from the code under test.
+INFRA = re.compile(r"Failed to acquire lock|Could not acquire lock|Failed to download|"
+                   r"error sending request|Connection (?:reset|refused|timed out)|ETIMEDOUT|ECONNRESET|"
+                   r"EAI_AGAIN|No space left on device|ENOSPC")
+INSTALL = re.compile(r"pip (?:install|sync)|npm (?:ci|install)|uv sync")
+
+
+def say(msg: str) -> None:
+    with print_lock:
+        print(msg, flush=True)
+
+
+def sh(cmd: list[str], **kw) -> str:
+    return subprocess.run(cmd, check=True, text=True, capture_output=True, **kw).stdout.strip()
+
+
+# --------------------------------------------------------------------------- expressions
+EXPR = re.compile(r"\$\{\{\s*(.*?)\s*\}\}")
+
+
+class Ctx:
+    def __init__(self, event: str, base_ref: str, head_ref: str):
+        self.event, self.base_ref, self.head_ref = event, base_ref, head_ref
+
+    def value(self, ref: str):
+        ref = ref.strip()
+        table = {
+            "github.event_name": self.event,
+            "github.base_ref": self.base_ref,
+            "github.head_ref": self.head_ref,
+            "github.ref": f"refs/pull/0/merge",
+            "runner.os": "Linux",
+        }
+        if ref in table:
+            return table[ref]
+        if ref.startswith(("secrets.", "github.token")):
+            return ""
+        # needs.*.outputs.* / steps.*.outputs.*: the only producers here are
+        # change detectors. Treat every filter as matched, i.e. run everything.
+        if ref.startswith(("needs.", "steps.")):
+            return "true"
+        return None
+
+
+def eval_cond(cond, ctx: Ctx) -> bool:
+    """Evaluate a GitHub `if:` well enough for the expressions CI files use.
+
+    Unknown expressions evaluate to True (run the job/step): running more than
+    GitHub would is safe for "would it pass", skipping something is not.
+    """
+    if cond is None:
+        return True
+    if isinstance(cond, bool):
+        return cond
+    s = EXPR.sub(r"\1", str(cond)).strip()
+    if s in ("always()", "success()", "!cancelled()"):
+        return True
+    if s in ("failure()", "cancelled()"):
+        return False
+    s = re.sub(r"\b(success|always)\(\)", "True", s)
+    s = re.sub(r"\bfailure\(\)|\bcancelled\(\)", "False", s)
+
+    def repl(m: re.Match) -> str:
+        v = ctx.value(m.group(0))
+        return repr(v) if v is not None else "__UNKNOWN__"
+
+    py = re.sub(r"\b(?:github|needs|steps|runner|secrets|env|inputs|matrix|vars)(?:\.[\w-]+)+", repl, s)
+    if "__UNKNOWN__" in py:
+        return True
+    py = py.replace("&&", " and ").replace("||", " or ")
+    py = re.sub(r"!(?!=)", " not ", py)
+    try:
+        return bool(eval(py, {"__builtins__": {}, "True": True, "False": False}))
+    except Exception:
+        return True
+
+
+def interpolate(val, ctx: Ctx) -> str:
+    def repl(m: re.Match) -> str:
+        v = ctx.value(m.group(1))
+        return "" if v is None else str(v)
+
+    return EXPR.sub(repl, str(val))
+
+
+# --------------------------------------------------------------------------- toolchains
+def uv_bin(version: str) -> Path:
+    """Path of the real uv binary at `version` (cached by uvx, no global install)."""
+    out = sh(["uvx", "--quiet", "--from", f"uv=={version}", "python", "-c",
+              "import uv; print(uv.find_uv_bin())"])
+    return Path(out.splitlines()[-1])
+
+
+_node_lock = threading.Lock()
+
+
+def node_dir(spec: str) -> Path:
+    """Official Node.js tarball for the newest release matching `spec` (e.g. 22)."""
+    major = str(spec).lstrip("v").split(".")[0]
+    with _node_lock:
+        with urllib.request.urlopen("https://nodejs.org/dist/index.json", timeout=30) as r:
+            rel = next(x["version"] for x in json.load(r) if x["version"].startswith(f"v{major}."))
+        dest = TOOLS / "node" / rel
+        if (dest / "bin" / "node").exists():
+            return dest
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        url = f"https://nodejs.org/dist/{rel}/node-{rel}-linux-x64.tar.xz"
+        tmp = dest.parent / f".{rel}.tar.xz"
+        say(f"  downloading Node {rel}")
+        urllib.request.urlretrieve(url, tmp)
+        with tarfile.open(tmp) as t:
+            t.extractall(dest.parent, filter="data")
+        (dest.parent / f"node-{rel}-linux-x64").rename(dest)
+        tmp.unlink()
+        return dest
+
+
+# --------------------------------------------------------------------------- services
+def start_service(run_id: str, job_id: str, sid: str, spec: dict, ctx: Ctx, log) -> tuple[str, dict[int, int]]:
+    name = f"cilocal-{run_id}-{job_id}-{sid}"[:120]
+    cmd = ["docker", "run", "-d", "--rm", "--name", name, "--memory", "2g"]
+    for k, v in (spec.get("env") or {}).items():
+        cmd += ["-e", f"{k}={interpolate(v, ctx)}"]
+    ports = []
+    for p in spec.get("ports") or []:
+        cport = int(str(p).split(":")[-1].split("/")[0])
+        ports.append(cport)
+        cmd += ["-p", f"127.0.0.1::{cport}"]  # random host port: parallel runs never clash
+    if spec.get("options"):
+        cmd += shlex.split(interpolate(spec["options"], ctx))
+    cmd.append(spec["image"])
+    log.write(f"$ {' '.join(cmd)}\n")
+    sh(cmd)
+    mapping = {}
+    for cport in ports:
+        out = sh(["docker", "port", name, f"{cport}/tcp"]).splitlines()[0]
+        mapping[cport] = int(out.rsplit(":", 1)[1])
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        st = sh(["docker", "inspect", "-f", "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", name])
+        if st in ("healthy", "none"):
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError(f"service {sid} never became healthy")
+    log.write(f"service {sid}: {name} ports {mapping}\n")
+    return name, mapping
+
+
+def remap_ports(val: str, mapping: dict[int, int]) -> str:
+    for cport, hport in mapping.items():
+        val = re.sub(rf"\b(localhost|127\.0\.0\.1):{cport}\b", f"127.0.0.1:{hport}", val)
+    return val
+
+
+# --------------------------------------------------------------------------- npm reuse
+def reuse_node_modules(src_frontend: Path, donors: list[Path], log) -> bool:
+    """Hard-link an existing node_modules whose install matches this lock exactly.
+
+    npm writes node_modules/.package-lock.json describing what is installed; if
+    its `packages` equal the lock's (minus the root entry), the tree is what
+    `npm ci` would produce. Hard links cost no disk and keep runs isolated.
+    """
+    lock = src_frontend / "package-lock.json"
+    if not lock.exists():
+        return False
+    want = {k: v for k, v in json.loads(lock.read_text()).get("packages", {}).items() if k}
+    strip = ("resolved", "integrity")  # hidden lock omits these sometimes
+    norm = lambda d: {k: {a: b for a, b in v.items() if a not in strip} for k, v in d.items()}
+    want_n = norm(want)
+    for donor in donors:
+        hidden = donor / "node_modules" / ".package-lock.json"
+        try:
+            if donor.resolve() == src_frontend.resolve() or not hidden.exists():
+                continue
+            have = json.loads(hidden.read_text()).get("packages", {})
+        except Exception:
+            continue
+        if norm(have) == want_n:
+            nm = (donor / "node_modules").resolve()
+            log.write(f"reusing node_modules from {nm} (hard links; matches package-lock.json)\n")
+            subprocess.run(["cp", "-al", str(nm), str(src_frontend / "node_modules")], check=True)
+            return True
+    return False
+
+
+# --------------------------------------------------------------------------- job runner
+class Job:
+    def __init__(self, jid, spec, wf, args, src: Path, run_dir: Path, run_id: str, ctx: Ctx):
+        self.jid, self.spec, self.wf, self.args = jid, spec, wf, args
+        self.src, self.ctx, self.run_id = src, ctx, run_id
+        self.dir = run_dir / jid
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.result, self.note, self.secs = "?", "", 0.0
+
+    def run(self) -> "Job":
+        t0 = time.time()
+        log = open(self.dir.parent / f"{self.jid}.log", "w", buffering=1)
+        services: list[str] = []
+        try:
+            self._run(log, services)
+        except Exception as e:  # infrastructure error, not a test failure
+            self.result, self.note = "ERROR", str(e)[:200]
+            log.write(f"\n!! ci-local error: {e}\n")
+        finally:
+            for name in services:
+                subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+            self.secs = time.time() - t0
+            log.close()
+        say(f"  {self.jid:<22} {self.result:<8} {self.secs:6.0f}s  {self.note}")
+        return self
+
+    def _run(self, log, services):
+        ctx = self.ctx
+        env = dict(os.environ)
+        env.update({
+            "CI": "true", "GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": ctx.event,
+            "GITHUB_BASE_REF": ctx.base_ref, "GITHUB_HEAD_REF": ctx.head_ref,
+            "GITHUB_WORKSPACE": str(self.src), "RUNNER_OS": "Linux", "RUNNER_TEMP": str(self.dir),
+            # Parallel jobs on a cold cache wait on each other's downloads (torch
+            # takes minutes here); uv's default 300 s lock wait is too short.
+            "UV_LOCK_TIMEOUT": "3600",
+        })
+        for k in ("VIRTUAL_ENV", "PYTHONPATH", "CONDA_PREFIX"):
+            env.pop(k, None)
+        mapping: dict[int, int] = {}
+        for sid, sspec in (self.spec.get("services") or {}).items():
+            name, m = start_service(self.run_id, self.jid, sid, sspec, ctx, log)
+            services.append(name)
+            mapping.update(m)
+        for k, v in {**(self.wf.get("env") or {}), **(self.spec.get("env") or {})}.items():
+            env[k] = remap_ports(interpolate(v, ctx), mapping)
+
+        path_prefix: list[str] = []
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        path_prefix.append(str(bin_dir))
+        venv = None
+        timeout = float(self.spec.get("timeout-minutes", 360)) * 60
+        deadline = time.time() + timeout
+
+        for i, step in enumerate(self.spec.get("steps") or [], 1):
+            label = step.get("name") or step.get("uses") or (step.get("run") or "").splitlines()[0]
+            if not eval_cond(step.get("if"), ctx):
+                log.write(f"\n=== [{i}] {label}: skipped (if: false)\n")
+                continue
+            uses = step.get("uses", "")
+            w = step.get("with") or {}
+            action = uses.split("@")[0]
+            log.write(f"\n=== [{i}] {label}\n")
+            if action == "actions/checkout" or action == "dorny/paths-filter":
+                log.write("  (clean merged checkout already prepared; filters treated as all-changed)\n")
+                continue
+            if action == "actions/setup-python":
+                ver = str(w.get("python-version", "3"))
+                venv = self.dir / "venv"
+                subprocess.run(["uv", "venv", "--quiet", "--python", ver, str(venv)], check=True,
+                               stdout=log, stderr=subprocess.STDOUT)
+                env["VIRTUAL_ENV"] = str(venv)
+                path_prefix.insert(0, str(venv / "bin"))
+                log.write(f"  venv {venv} ({sh([str(venv / 'bin' / 'python'), '-V'])})\n")
+                continue
+            if action == "astral-sh/setup-uv":
+                ver = str(w.get("version", "")).strip()
+                real = uv_bin(ver) if ver else Path(shutil.which("uv"))
+                for exe in ("uv", "uvx"):
+                    tgt = real.with_name(exe)
+                    if tgt.exists():
+                        (bin_dir / exe).unlink(missing_ok=True)
+                        (bin_dir / exe).symlink_to(tgt)
+                log.write(f"  uv {sh([str(real), '--version'])}\n")
+                continue
+            if action == "actions/setup-node":
+                nd = node_dir(w.get("node-version", "lts"))
+                path_prefix.insert(0, str(nd / "bin"))
+                log.write(f"  node {nd.name}\n")
+                continue
+            if uses:
+                self.result, self.note = "UNSUPPORTED", f"step uses {uses}; run this job with act"
+                log.write(f"  {self.note}\n")
+                return
+            # ---- a run: step, verbatim except the two substitutions below
+            script = interpolate(step["run"], ctx)
+            if venv is not None:
+                # --system means "the runner's Python"; here that is this job's venv.
+                script = re.sub(r"(uv pip (?:install|sync)\b[^\n]*?) --system\b", r"\1", script)
+            wd = self.src / step.get("working-directory", self.spec.get("defaults", {}).get("run", {}).get("working-directory", "."))
+            if re.search(r"(^|&&|;)\s*(cd frontend && )?npm ci\b", script) and not self.args.no_reuse_npm:
+                fe = self.src / "frontend"
+                if reuse_node_modules(fe, self.args.npm_donors, log):
+                    log.write("  npm ci skipped: identical node_modules hard-linked\n")
+                    continue
+                script = script.replace("npm ci", "npm ci --prefer-offline --no-audit --no-fund")
+            step_env = dict(env)
+            for k, v in (step.get("env") or {}).items():
+                step_env[k] = remap_ports(interpolate(v, ctx), mapping)
+            step_env["PATH"] = os.pathsep.join(path_prefix + [env["PATH"]])
+            sfile = self.dir / f"step{i}.sh"
+            sfile.write_text(script)
+            log.write(f"$ {script.strip()}\n")
+            t = time.time()
+            # timeout-minutes is sized for GitHub's network; a cold local cache can
+            # spend longer downloading, so install steps get their own hour.
+            is_install = bool(INSTALL.search(script))
+            left = 3600 if is_install else deadline - time.time()
+            if is_install:
+                deadline += 3600
+            try:
+                rc = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", str(sfile)],
+                                    cwd=wd, env=step_env, stdout=log, stderr=subprocess.STDOUT,
+                                    timeout=max(left, 1)).returncode
+            except subprocess.TimeoutExpired:
+                rc = 124
+            log.write(f"--- exit {rc} after {time.time() - t:.1f}s\n")
+            if rc != 0 and not step.get("continue-on-error"):
+                tail = (self.dir.parent / f"{self.jid}.log").read_text()[-4000:]
+                # only install steps: a test that hits "Connection refused" is a real failure
+                if is_install and (rc == 124 or INFRA.search(tail)):
+                    self.result, self.note = "ERROR", f"step {i}: {label}: download/lock problem, not the code; re-run"
+                else:
+                    self.result, self.note = "FAIL", f"step {i}: {label} (exit {rc})"
+                return
+        self.result = "PASS"
+
+
+# --------------------------------------------------------------------------- main
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--repo", default=".", help="any checkout of the repo (default: cwd)")
+    ap.add_argument("--pr", type=int, help="PR number: head/base taken from GitHub (gh)")
+    ap.add_argument("--head", default="HEAD", help="commit/branch to test (default HEAD)")
+    ap.add_argument("--base", default="dev", help="base branch the PR targets (default dev)")
+    ap.add_argument("--base-sha", help="exact base commit (default: origin/<base> after fetch)")
+    ap.add_argument("--workflow", default=".github/workflows/ci.yml")
+    ap.add_argument("--event", default="pull_request")
+    ap.add_argument("-j", "--jobs", help="comma-separated job ids (default: every job the event would run)")
+    ap.add_argument("-p", "--parallel", type=int, default=3, help="jobs at once (default 3)")
+    ap.add_argument("--no-fetch", action="store_true")
+    ap.add_argument("--no-reuse-npm", action="store_true", help="always run npm ci")
+    ap.add_argument("--keep", action="store_true", help="keep the clone and venvs")
+    ap.add_argument("--list", action="store_true", help="show which jobs would run, then exit")
+    args = ap.parse_args()
+
+    repo = Path(sh(["git", "-C", args.repo, "rev-parse", "--show-toplevel"]))
+    if not args.no_fetch:
+        subprocess.run(["git", "-C", str(repo), "fetch", "--quiet", "origin"], check=False)
+    head_ref = args.head
+    if args.pr:
+        info = json.loads(sh(["gh", "pr", "view", str(args.pr), "--json", "headRefOid,baseRefName,headRefName"], cwd=repo))
+        head_sha, args.base, head_ref = info["headRefOid"], info["baseRefName"], info["headRefName"]
+        local = sh(["git", "-C", str(repo), "rev-parse", "HEAD"])
+        if local != head_sha and args.head == "HEAD":
+            say(f"note: testing the PR head on GitHub ({head_sha[:9]}), not local HEAD ({local[:9]})")
+    else:
+        head_sha = sh(["git", "-C", str(repo), "rev-parse", args.head])
+        if args.head == "HEAD":
+            dirty = sh(["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=no"])
+            if dirty:
+                say("warning: uncommitted changes are NOT tested (GitHub would not see them either)")
+            head_ref = sh(["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"])
+    base_sha = args.base_sha or sh(["git", "-C", str(repo), "rev-parse", f"origin/{args.base}"])
+
+    run_id = f"{head_sha[:9]}-{dt.datetime.now():%H%M%S}-{os.getpid()}"
+    run_dir = RUNS_ROOT / run_id
+    src = run_dir / "src"
+    run_dir.mkdir(parents=True)
+    say(f"ci-local {run_id}: {head_ref} {head_sha[:9]} merged into {args.base} {base_sha[:9]}")
+    say(f"  logs: {run_dir}")
+
+    # GitHub tests refs/pull/N/merge: the head merged into the base. Same here,
+    # from committed objects only, in a throwaway clone sharing the object store.
+    subprocess.run(["git", "clone", "--quiet", "--shared", "--no-checkout", str(repo), str(src)], check=True)
+    subprocess.run(["git", "-C", str(src), "checkout", "--quiet", "--detach", base_sha], check=True)
+    if sh(["git", "-C", str(src), "merge-base", base_sha, head_sha]) != head_sha:
+        m = subprocess.run(["git", "-C", str(src), "-c", "user.name=ci-local", "-c", "user.email=ci@local",
+                            "merge", "--quiet", "--no-ff", "--no-edit", head_sha], capture_output=True, text=True)
+        if m.returncode != 0:
+            say("FAIL: the PR does not merge cleanly into its base (GitHub would not run CI either)")
+            say(m.stdout + m.stderr)
+            shutil.rmtree(src, ignore_errors=True)
+            return 2
+    wf = yaml.safe_load((src / args.workflow).read_text())
+    ctx = Ctx(args.event, args.base, head_ref)
+    all_jobs = wf.get("jobs") or {}
+    if args.jobs:
+        chosen = [j.strip() for j in args.jobs.split(",")]
+        missing = [j for j in chosen if j not in all_jobs]
+        if missing:
+            say(f"unknown job(s): {missing}; have {list(all_jobs)}")
+            shutil.rmtree(run_dir, ignore_errors=True)
+            return 2
+    else:
+        chosen = [j for j, s in all_jobs.items() if eval_cond(s.get("if"), ctx)]
+    skipped = [j for j in all_jobs if j not in chosen]
+    say(f"  jobs: {', '.join(chosen)}" + (f"  (not run for this event: {', '.join(skipped)})" if skipped else ""))
+    if args.list:
+        shutil.rmtree(run_dir, ignore_errors=True)
+        return 0
+
+    # node_modules donors: every checkout of this repo that has an install
+    wts = sh(["git", "-C", str(repo), "worktree", "list", "--porcelain"]).splitlines()
+    args.npm_donors = [Path(l.split(" ", 1)[1]) / "frontend" for l in wts if l.startswith("worktree ")]
+
+    jobs = [Job(j, all_jobs[j], wf, args, src, run_dir, run_id, ctx) for j in chosen]
+    t0 = time.time()
+    with cf.ThreadPoolExecutor(max_workers=max(1, args.parallel)) as ex:
+        done = list(ex.map(lambda j: j.run(), jobs))
+    total = time.time() - t0
+
+    ok = all(j.result == "PASS" for j in done)
+    lines = [f"# ci-local {run_id}", "",
+             f"- head: `{head_ref}` {head_sha}", f"- base: `{args.base}` {base_sha} (tested the merge, like GitHub)",
+             f"- workflow: `{args.workflow}` event `{args.event}`", f"- wall time: {total:.0f}s", "",
+             "| Job | Result | Time | Note |", "|---|---|---|---|"]
+    lines += [f"| {j.jid} | {j.result} | {j.secs:.0f}s | {j.note} |" for j in done]
+    if skipped:
+        lines += ["", f"Not run for this event (their `if:` is false): {', '.join(skipped)}"]
+    (run_dir / "summary.md").write_text("\n".join(lines) + "\n")
+    say(f"{'PASS' if ok else 'FAIL'} in {total:.0f}s  -> {run_dir / 'summary.md'}")
+
+    if not args.keep:
+        shutil.rmtree(src, ignore_errors=True)
+        for j in done:
+            shutil.rmtree(j.dir, ignore_errors=True)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
