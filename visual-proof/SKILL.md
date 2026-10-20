@@ -35,8 +35,10 @@ section, plus an inline copy in the T3 chat.
    immediately. Do not reconstruct order from mtimes afterwards.
 5. **Mind what the screenshot lags.** Modals/toasts can lag; retake or wait on a
    selector first.
-6. Follow the user's browser rules (T3 preview first, Browser Control fallback, never
-   Playwright). Scratch lives in `~/temp/`, not `/tmp`.
+6. Follow the user's browser rules: pick T3 preview or Browser Control by fit, never
+   Playwright. With Browser Control, pass `style: "[id^=__browser_control]{display:none!important}"`
+   to `page.screenshot` so the agent cursor and session pill stay out of the shots.
+   Scratch lives in `~/temp/`, not `/tmp`.
 7. **English + light first** (see "Default look" below); other languages and dark mode
    come as extra shots after the base ones.
 

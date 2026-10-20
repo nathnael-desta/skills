@@ -18,7 +18,7 @@ absolute path, e.g. `bash ~/.agents/skills/browser-control-setup/scripts/doctor.
 | `prepare-extension.sh` | | Re-copies the npm extension at every start and patches its port to 19990, so upgrades carry over. |
 | `BROWSER_CONTROL_PORT=19990`, `BROWSER_CONTROL_AUTOSTART=false` | | Set in `~/.bashrc`, `~/.config/environment.d/` and the Claude/Antigravity MCP `env`. Agents default to the agent browser and never spawn relays. |
 | `bcx` (`~/.local/bin`) | | Compact `execute --json` output, about 8x smaller. |
-| `~/.claude/hooks/browser-control-guard.py` | | Blocks `bringToFront`, CDP recording, `waitForTimeout` > 1 s, and download waits. |
+| `~/.claude/hooks/browser-control-guard.py` | | Blocks `bringToFront` and CDP recording aimed at the user's Chrome (they steal focus), and download waits (they crash the relay). Nothing else is capped. |
 
 Lessons this design encodes (2026-10-20):
 

@@ -12,6 +12,22 @@ agent browser is missing, or calls fail to connect, use that skill.
 Full upstream reference for the installed version: `browser-control skill`. Read
 only the section you need, e.g. `browser-control skill | sed -n '/## Recording/,/^## /p'`.
 
+## Browser Control or T3 preview?
+
+Pick per task. In T3 Code, the `preview_*` tools fit when the user is involved:
+
+- they watch it inline and can take over or check things off themselves
+- screenshots meant for them (`preview_snapshot` with `save: true`)
+- theme or viewport checks, devices, recordings, drag/hover/upload/dialogs
+
+Browser Control fits agent-side verification:
+
+- It is usually cheaper. A flow runs as one Playwright script in one call, with compact output.
+  Measured: a 50-row page cost ~8.5 KB via `preview_snapshot`, ~3 KB via `snapshot()` and 64 B
+  via `snapshot({ find })`. A form fill+submit+verify was 1 call and 56 B, against ~6 preview calls.
+- It runs invisibly from any agent or terminal and supports parallel sessions.
+- It can use the user's logged-in Chrome, with `handoff()` for 2FA.
+
 ## Which browser
 
 | Target | How | Use for |
@@ -20,8 +36,9 @@ only the section you need, e.g. `browser-control skill | sed -n '/## Recording/,
 | The user's real Chrome | prefix `BROWSER_CONTROL_PORT=19989` | Their logged-in third-party accounts. Ask them to click the Browser Control toolbar button on the tab, then `session adopt`. |
 
 Never run `browser-control serve` or `relay restart`; the relays are systemd
-services and `BROWSER_CONTROL_AUTOSTART=false`. After 2 connection errors (not
-connected, relay unavailable), stop and report instead of retrying.
+services and `BROWSER_CONTROL_AUTOSTART=false`. If connection errors repeat (not
+connected, relay unavailable), don't loop: check the setup with `browser-control-setup`
+or report it.
 
 ## Calling it
 
@@ -40,7 +57,7 @@ error, URL change and page console errors only when present. Without `bcx`, pipe
   DOM access needs `page.evaluate(() => …)`; bare `document` throws.
 - Single expressions auto-return; multi-statement scripts need `return`.
 - Use real `http://` URLs (`data:` URLs abort) or `page.setContent(html)`.
-- Batch all code changes first, then verify in ONE session. Target ≤15 calls; past 30 is over-use.
+- Batch code changes first, then verify in one session. Fewer, bigger scripts cost less than many small calls.
 
 ## Inspect, act, verify
 
@@ -53,9 +70,10 @@ error, URL change and page console errors only when present. Without `bcx`, pipe
 - `ariaSnapshot()` is about 6x larger. Use it only when the compact snapshot lacks structure.
 - Keep dependent steps (open menu → click item) in one call. Return evidence (URL,
   text, counts), not `"ok"`. A click returning is not proof; wait for the destination or receipt.
-- Waits: `locator.waitFor()`, `page.waitForURL()`, `page.waitForResponse()`. No
-  `waitForTimeout` over 1000 ms.
-- Keep action timeouts ≤ 8 s. Never re-run a failing call unchanged; inspect with `snapshot()` first.
+- Waits: prefer conditions (`locator.waitFor()`, `page.waitForURL()`, `page.waitForResponse()`)
+  over sleeps. A sleep that never fails can pass a broken page.
+- Short action timeouts make failures surface fast. Don't re-run a failing call unchanged;
+  inspect with `snapshot()` first.
 - Forms: `getByLabel(...).fill()`, `selectOption`, `check`. If `fill` hangs, use `fillInput(locator, value)`.
 
 ## Screenshots: visual checkpoints only
@@ -79,7 +97,8 @@ await page.screenshot({ path: "/home/<user>/temp/<task>/after.png", style: "[id^
 
 ## Never
 
-- `page.bringToFront()` or `recording --mode cdp` in the user's Chrome. They raise the window and steal the user's focus.
+- `page.bringToFront()` or `recording --mode cdp` in the user's Chrome (19989): they raise the window
+  and steal the user's focus. They are harmless in the agent browser.
 - `page.waitForEvent("download")`: it is unsupported through the extension in 0.8.4 and crashes the relay.
   Fetch the bytes in `page.evaluate` and write them with `fs`.
 - Using the browser as an API test runner: use `curl`.

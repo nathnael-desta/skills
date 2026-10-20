@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """PreToolUse guard for Browser Control calls (Bash CLI/bcx and the MCP execute tool).
 
-Blocks patterns the usage audit (2026-10-20) found costly or disruptive:
-bringToFront / CDP recording (steal desktop focus), long waitForTimeout sleeps
-(~45 min of pure sleep in a month), and waiting for downloads (crashes the relay).
+Blocks only what breaks things, not style choices:
+- bringToFront / CDP recording aimed at the user's own Chrome (port 19989): they
+  raise the window and steal desktop focus. Harmless in the headless agent browser.
+- waiting for downloads on any relay: unsupported through the extension in 0.8.4
+  and crashes the relay.
 Exit 2 + stderr tells the agent why, so it can rewrite the call.
 """
 import json
@@ -29,14 +31,11 @@ else:
     sys.exit(0)
 
 problems = []
-if re.search(r"bringToFront", text):
-    problems.append("bringToFront raises Chrome and steals the user's focus; screenshots and clicks work without it")
-if re.search(r"--mode\s+cdp|\bmode[\"']?\s*[:=]\s*[\"']?cdp\b", text):
-    problems.append("CDP recording calls Page.bringToFront and steals focus; record another way or skip it")
-for ms in re.findall(r"waitForTimeout\(\s*(\d[\d_]*)", text):
-    if int(ms.replace("_", "")) > 1000:
-        problems.append(f"waitForTimeout({ms}) is a blind sleep; wait for a condition (waitFor, waitForURL, waitForResponse) instead. Settles up to 1000 ms are allowed")
-        break
+users_chrome = re.search(r"BROWSER_CONTROL_PORT=[\"']?19989\b", text) is not None
+if users_chrome and re.search(r"bringToFront", text):
+    problems.append("bringToFront raises the user's Chrome and steals their focus; screenshots and clicks work without it")
+if users_chrome and re.search(r"--mode\s+cdp|\bmode[\"']?\s*[:=]\s*[\"']?cdp\b", text):
+    problems.append("CDP recording calls Page.bringToFront and steals the user's focus; record in the agent browser (port 19990) instead")
 if re.search(r"waitForEvent\(\s*[\"']download", text):
     problems.append("downloads are unsupported through the extension and this crashes the relay; fetch the bytes in page.evaluate and write them with fs")
 
