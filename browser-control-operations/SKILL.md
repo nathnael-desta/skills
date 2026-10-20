@@ -1,84 +1,125 @@
 ---
 name: browser-control-operations
-description: Drive a browser through Browser Control MCP economically and reliably. Use when a task needs browser interaction, localhost UI iteration, an authenticated or attached tab, stateful web debugging, or visual verification of rendered output.
+description: Drive a browser through Browser Control economically and reliably. Use when a task needs browser interaction, localhost UI verification, an authenticated tab in the user's own Chrome (2FA, passkeys, CAPTCHAs, payments via handoff), stateful web debugging, or visual verification of rendered output.
 ---
 
 # Browser Control operations
 
-Browser Control MCP is the default browser transport. This skill is the
-operating policy for using it without burning context or producing false
-passes.
+Operating policy for Browser Control (`@opencode-ai/browser-control`, tested on
+0.8.4). It assumes the `browser-control-setup` skill's install: if `bcx` or the
+agent browser is missing, or calls fail to connect, use that skill.
 
-## Why this transport
+Full upstream reference for the installed version: `browser-control skill`. Read
+only the section you need, e.g. `browser-control skill | sed -n '/## Recording/,/^## /p'`.
 
-Measured on identical operations:
+## Which browser
 
-| Operation    | playwright-cli | Browser Control | Browser Control + filtered JSON |
-| ------------ | -------------- | --------------- | ------------------------------- |
-| Trivial eval | 124 B          | 3 B             | 3 B                             |
-| Navigate     | 419 B          | 642 B           | **39 B**                        |
+| Target | How | Use for |
+|---|---|---|
+| Headless agent Chrome (default) | `BROWSER_CONTROL_PORT=19990` is already set | Anything you can log into yourself: localhost apps, staging. No window, never touches the user's screen. Logins persist (cookies flush ~30 s after login). |
+| The user's real Chrome | prefix `BROWSER_CONTROL_PORT=19989` | Their logged-in third-party accounts. Ask them to click the Browser Control toolbar button on the tab, then `session adopt`. |
 
-Roughly ten times cheaper on the calls that matter — **but only with filtered
-JSON**. The playwright-cli skill additionally echoes the whole script back in a
-"Ran Playwright code" block on every run and writes snapshot files you then pay
-to read.
+Never run `browser-control serve` or `relay restart`; the relays are systemd
+services and `BROWSER_CONTROL_AUTOSTART=false`. After 2 connection errors (not
+connected, relay unavailable), stop and report instead of retrying.
 
-## Non-negotiables
+## Calling it
 
-1. **Always request JSON output and filter it to the fields you need.** Plain
-   output emits every console and network event. One noisy page — a failing auth
-   script, a WebSocket retry loop — floods a single call.
-2. **Code executes Node-side.** Anything touching the document must run inside
-   `page.evaluate`. Reaching for `document` at the top level fails.
-3. **Assert, do not sleep.** Use real Playwright locators — `getByRole`, `fill`,
-   `waitForSelector`. Sleeping and re-polling makes a component that never
-   mounts pass silently; a locator fails immediately and tells you why.
-4. **One session.** Prefer a single named or adopted session, especially the
-   user's attached authenticated tab. Sessions persist across calls, so do not
-   re-login each time.
+```bash
+bcx 'await page.goto("http://localhost:3000/login"); return await snapshot()'   # prints "session: <id>"
+bcx --session <id> 'await ref("e3").click(); await page.waitForURL("**/dashboard"); return page.url()'
+bcx --session <id> --file ./flow.js
+browser-control session delete <id>       # when done
+```
 
-## Keeping context small
+`bcx` is `browser-control execute --json` with compact output: the value, plus an
+error, URL change and page console errors only when present. Without `bcx`, pipe
+`--json` to `jq .value`.
 
-- Start with **one bounded snapshot** of the relevant region, not the page.
-- Combine dependent interactions and focused DOM assertions into **one execute
-  call**, and return only acceptance-specific structured evidence.
-- Use snapshot diff only for compatible same-page changes — never across
-  navigation or reload.
-- Preserve the session through localhost/HMR cycles. Request a fresh bounded
-  snapshot only when state is surprising or refs are stale.
-- Avoid repeated full snapshots, raw HTML, full accessibility trees,
-  console/network dumps, and screenshots on every turn.
+- Code runs in Node with `page`, `context`, `state` (persists per session), `fs`, `path`.
+  DOM access needs `page.evaluate(() => …)`; bare `document` throws.
+- Single expressions auto-return; multi-statement scripts need `return`.
+- Use real `http://` URLs (`data:` URLs abort) or `page.setContent(html)`.
+- Batch all code changes first, then verify in ONE session. Target ≤15 calls; past 30 is over-use.
 
-## Visual checkpoints
+## Inspect, act, verify
 
-Capture a screenshot only for: the initial bug, a material visual change, an
-ambiguous DOM-versus-rendered result, and final confirmation.
+- `snapshot()` gives a compact semantic tree with refs `e1..eN`; act with `ref("e12").click()`.
+- Cheaper reads:
+  - `snapshot({ find: /checkout/i, context: 2 })`
+  - `snapshot({ diff: true })` after an action, with the same options as the previous snapshot
+  - `snapshot({ within: "form", maxItems: 40 })`, where `within` must match exactly one element
+  - a targeted `page.evaluate`
+- `ariaSnapshot()` is about 6x larger. Use it only when the compact snapshot lacks structure.
+- Keep dependent steps (open menu → click item) in one call. Return evidence (URL,
+  text, counts), not `"ok"`. A click returning is not proof; wait for the destination or receipt.
+- Waits: `locator.waitFor()`, `page.waitForURL()`, `page.waitForResponse()`. No
+  `waitForTimeout` over 1000 ms.
+- Keep action timeouts ≤ 8 s. Never re-run a failing call unchanged; inspect with `snapshot()` first.
+- Forms: `getByLabel(...).fill()`, `selectOption`, `check`. If `fill` hangs, use `fillInput(locator, value)`.
 
-Save screenshots to temporary absolute paths. If a visual analyst is available
-(see `antigravity-delegation`), route them there rather than to the primary
-model. Maintain a compact UI intent/state summary across checkpoints.
+## Screenshots: visual checkpoints only
 
-Verify any actionable visual finding through DOM, ARIA, computed styles, or
-bounding boxes before editing. A visual analyst is advisory: it must never
-click, type, authenticate, approve, or control the browser.
+Image reads are the largest token cost in practice. Take one for:
 
-## Human handoff
+- the initial bug
+- a material visual change
+- a DOM-versus-rendered ambiguity
+- final confirmation
 
-Use Browser Control handoff for CAPTCHA, 2FA, passkeys, payment confirmation, or
-any other human-only step, then independently verify the expected URL or a
-stable element before continuing.
+```js
+await page.screenshot({ path: "/home/<user>/temp/<task>/after.png", style: "[id^=__browser_control]{display:none!important}" })
+```
 
-Browser Control can **adopt the user's real authenticated tab**. That is what
-makes logged-in work possible, and it is also why destructive or
-account-changing actions require explicit user confirmation first.
+- `style` hides the agent cursor and session pill.
+- The agent browser renders at 1440 px.
+- The CLI returns only image metadata, so save with `path:` and read the file.
+- Compare with `screenshotDiff({ baseline: "/abs/before.png" })`.
+- Confirm any visual finding through the DOM, computed styles or bounding boxes before editing.
 
-## When it is unavailable
+## Never
 
-Use its status and doctor diagnostics and ask the user to attach or reconnect.
-Do not silently fall back to an isolated browser — an isolated browser is not
-logged in, so results will not reflect the user's actual session.
+- `page.bringToFront()` or `recording --mode cdp` in the user's Chrome. They raise the window and steal the user's focus.
+- `page.waitForEvent("download")`: it is unsupported through the extension in 0.8.4 and crashes the relay.
+  Fetch the bytes in `page.evaluate` and write them with `fs`.
+- Using the browser as an API test runner: use `curl`.
+- Working around CDP guardrails, protection tokens or CAPTCHAs.
+- Handing live browser control to a worker or reviewer subagent. Inspect, act and verify stay with the orchestrator.
 
-## Ownership
+## The user's Chrome: adopt and hand off
 
-Keep inspect, act, and verify under the orchestrator's own control. Do not
-delegate live browser interaction to a worker or reviewer.
+```bash
+BROWSER_CONTROL_PORT=19989 browser-control session adopt --target-url github.com --session gh
+BROWSER_CONTROL_PORT=19989 bcx --session gh 'return await snapshot()'
+```
+
+For 2FA, passkeys, CAPTCHA or payment, hand the step to the user, then verify:
+
+```js
+await handoff("Complete the security-key prompt, then continue", {
+  timeoutMs: 600_000,
+  start: () => page.getByRole("button", { name: /sign in/i }).click({ timeout: 600_000 }),
+})
+await page.waitForURL((u) => !u.pathname.startsWith("/login"))
+return page.url()
+```
+
+Destructive or account-changing actions:
+
+1. Read the candidates.
+2. Get the user's approval for the exact items.
+3. Re-select only those items.
+4. Assert the confirmation dialog's text.
+5. Confirm, then verify.
+
+Never auto-accept dialogs globally. For inspect-only work, use `browser-control session new <name> --read-only`.
+
+## More (in `browser-control skill`)
+
+- Network capture and secrets: `network start/stop`, `secrets run`
+- Recording and the flight recorder
+- `demonstrate()`
+- WebMCP
+- Password-manager prompts
+- The TypeScript client
+- The journal: `browser-control journal --session <id>`

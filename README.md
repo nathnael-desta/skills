@@ -65,9 +65,15 @@ before continuing.
   and add Beads as the implementation execution graph plus a scoped, pull-only
   GitHub planning mirror with minimal defaults and routing policy.
 - `browser-control-operations` - operating policy for driving a browser through
-  Browser Control MCP: filtered JSON output, `page.evaluate` for document work,
-  real Playwright locators instead of sleep-polling, bounded snapshots, visual
+  Browser Control: headless agent browser by default and the user's Chrome
+  only for its logged-in tabs, compact `bcx` output, `page.evaluate` for
+  document work, real waits instead of sleeps, bounded snapshots, visual
   checkpoints, and human handoff.
+- `browser-control-setup` - install, check, repair, upgrade and smoke-test the
+  Browser Control setup on Linux. It covers systemd relays that outlive agent
+  sessions and a headless Chrome for Testing that never takes the user's focus,
+  plus the `bcx` wrapper and a Claude Code guard hook. Ships `install.sh`,
+  `doctor.sh` and `smoke-test.sh`.
 - `antigravity-delegation` - policy for offloading perception-heavy and
   large-context read-only work to Google Gemini through Antigravity, including
   what to substitute, what is prohibited, and how to respect the AI Pro quota.

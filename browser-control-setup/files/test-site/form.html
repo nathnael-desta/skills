@@ -1,0 +1,6 @@
+<!doctype html><html><head><title>Form</title></head><body><h1>Sign up</h1>
+<form onsubmit="event.preventDefault();fetch('/api.json').then(r=>r.json()).then(j=>{document.querySelector('#msg').textContent='Thanks '+document.querySelector('#name').value+' '+j.ok})">
+<label>Name <input id="name" name="name"></label>
+<label>Plan <select id="plan"><option>Free</option><option>Pro</option></select></label>
+<label><input type="checkbox" id="tos"> Accept</label>
+<button type="submit">Submit</button></form><p id="msg" role="status"></p></body></html>

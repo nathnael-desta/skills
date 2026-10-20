@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head><title>BC Test</title><style>body{font-family:sans-serif}.hidden{display:none}</style></head>
+<body>
+<h1>Browser Control test</h1>
+<nav><a href="/form.html">Go to form</a></nav>
+<button onclick="setTimeout(()=>{document.getElementById('out').classList.remove('hidden')},400)">Show result</button>
+<p id="out" class="hidden" role="status">Result shown</p>
+<ul id="rows"></ul>
+<script>
+for (let i = 1; i <= 50; i++) document.getElementById("rows").insertAdjacentHTML("beforeend", `<li>Row ${i} <button>Action ${i}</button></li>`)
+console.error("test-error-from-page")
+</script>
+</body>
+</html>

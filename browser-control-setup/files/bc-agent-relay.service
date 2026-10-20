@@ -1,0 +1,14 @@
+[Unit]
+Description=Browser Control relay for the headless agent browser (127.0.0.1:19990)
+
+[Service]
+Type=simple
+Environment=BROWSER_CONTROL_PORT=19990
+ExecStart=@NODE@ @PKG@/dist/cli.js serve
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+MemoryMax=1G
+
+[Install]
+WantedBy=default.target

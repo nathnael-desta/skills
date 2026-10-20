@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# bcx: token-lean `browser-control execute`. Same arguments as execute.
+# Prints the return value (strings raw, everything else compact JSON), then a
+# line each for a new session id, error, warnings, navigation and page console
+# errors, only when present. Exits 1 when the script failed.
+err=$(mktemp)
+out=$(mktemp)
+trap 'rm -f "$err" "$out"' EXIT
+browser-control execute --json "$@" >"$out" 2>"$err"
+if ! jq -e . "$out" >/dev/null 2>&1; then
+  # execute failed before producing JSON (relay down, bad flags, ...)
+  head -c 800 "$err" >&2
+  exit 1
+fi
+jq -r '
+  (if .session.created then "session: \(.session.id)  (reuse with --session \(.session.id))" else empty end),
+  (if .ok then (.value | if type == "string" then . elif . == null then "(no value)" else tojson end)
+   else "ERROR: " + ((.error.message? // .error // .text) | tostring | split("\n    at ")[0] | .[0:700]) end),
+  (if (.warnings | length) > 0 then "warnings: " + (.warnings | tojson | .[0:400]) else empty end),
+  (if (.aftermath.startUrl? // "") != (.aftermath.endUrl? // "") then "url: \(.aftermath.endUrl)" else empty end),
+  (if ((.aftermath.consoleErrorCount // 0) + (.aftermath.pageErrorCount // 0)) > 0
+   then "page errors: " + ([.logs[]? | select(.type == "error" or .type == "pageerror") | .text[0:160]] | unique | .[0:5] | tojson)
+   else empty end)
+' "$out"
+jq -e .ok "$out" >/dev/null

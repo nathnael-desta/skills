@@ -1,0 +1,18 @@
+[Unit]
+Description=Browser Control relay (127.0.0.1:19989), kept outside T3 agent sessions
+After=default.target
+
+[Service]
+Type=simple
+# Explicit: environment.d sets the agent default (19990) for every user service.
+Environment=BROWSER_CONTROL_PORT=19989
+# Foreground (unmanaged) relay: agents' `relay restart` refuses it; after an
+# npm upgrade re-run browser-control-setup/scripts/install.sh instead.
+ExecStart=@NODE@ @PKG@/dist/cli.js serve
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+MemoryMax=1G
+
+[Install]
+WantedBy=default.target

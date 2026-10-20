@@ -1,0 +1,27 @@
+[Unit]
+Description=Headless Chrome for agents (Browser Control on 19990, never shows a window)
+Requires=bc-agent-relay.service
+After=bc-agent-relay.service
+
+[Service]
+Type=simple
+Environment=BROWSER_CONTROL_PORT=19990
+Environment=BC_PKG=@PKG@
+ExecStartPre=%h/.local/share/bc-agent-browser/prepare-extension.sh
+# Anti-throttling flags: agent tabs open in the background, and without these
+# Chrome stalls their timers and rendering (screenshots hang on "fonts").
+ExecStart=%h/.local/share/bc-agent-browser/chrome/chrome --headless=new \
+  --user-data-dir=%h/.local/share/bc-agent-browser/profile \
+  --window-size=1440,900 --no-first-run --no-default-browser-check \
+  --disable-background-timer-throttling --disable-renderer-backgrounding \
+  --disable-backgrounding-occluded-windows \
+  --load-extension=%h/.local/share/bc-agent-browser/extension \
+  --disable-extensions-except=%h/.local/share/bc-agent-browser/extension \
+  about:blank
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+MemoryMax=3G
+
+[Install]
+WantedBy=default.target
