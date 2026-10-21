@@ -18,7 +18,7 @@ triggers:
 
 Generate structured, high-signal feature breakdowns, release changelogs, and "what's new" catalogs for any software project, library, CLI, or product.
 
-Whenever a user asks what has changed, what features were merged, or asks for release notes, do not output a generic unformatted bullet list or raw git logs. Instead, use this structured catalog format with PR/commit references, bold sub-topics, and explicit `What it does:` breakdowns with square bullet points.
+Whenever a user asks what has changed, what features were merged, or asks for release notes, do not output a generic unformatted bullet list or raw git logs. Instead, use this structured catalog format with embedded PR/commit links, bold sub-topics, prioritized user-facing capabilities, and explicit `What it does:` breakdowns with square bullet points.
 
 ---
 
@@ -36,18 +36,17 @@ Applicable to **any** codebase, repository, or product (not limited to any singl
 
 ---
 
-## Source Gathering Process
+## Core Principles
 
-1. **Identify the Range**:
-   - Determine the start point (last checked date, previous release tag, base branch, or commit SHA) and the end point (current release, latest nightly, or HEAD).
-   - If git history is available locally or via CLI (`gh`, `git log`), query the commits and merged PRs across that specific window.
+1. **Prioritize User-Facing Features**:
+   - Give top prominence to changes the user will directly see, touch, or experience in their daily workflow: UI updates, composer interactions, keyboard shortcuts, new settings, visual badges, mobile screens, and CLI additions.
+   - Group internal refactors or build tooling toward the end or omit them if user-facing changes dominate the release.
 
-2. **Extract High-Signal Changes**:
-   - Filter for user-facing features (`feat`), notable enhancements, significant performance wins (`perf`), major architectural milestones (`chore(release)`, `refactor`), and critical bug fixes.
-   - Ignore trivial dependency bumps, typo fixes, or internal housekeeping unless they impact user workflows or build performance.
+2. **Always Embed Real Clickable Markdown Links**:
+   - Every PR or commit mention MUST be an active clickable markdown link, e.g. `[🐙#22732](https://github.com/org/repo/pull/22732)`. Never output unlinked plain text like `#22732` or `🐙#22732`.
 
-3. **Synthesize & Group**:
-   - Group related commits/PRs into cohesive themes or numbered sections (e.g., Major Milestone Releases, Core Features, UI/UX Enhancements, Performance & Reliability, Tooling & Infrastructure).
+3. **Exhaustive Legwork**:
+   - Don't settle for only 3–5 items if 15–20 user-facing features or polish fixes were merged. Gather the full picture across web, desktop, mobile, and CLI.
 
 ---
 
@@ -63,57 +62,29 @@ Here is the feature breakdown and changelog of everything merged into `main` sin
 
 ### 2. Main Title Banner
 ```markdown
-🚀 <Project/Product Name> Update Catalog (<Version/Commit Range>)
+# 🚀 <Project/Product Name> Update Catalog (<Version/Commit Range>)
 ```
 
-### 3. Numbered Feature / Milestone Sections
-Format each major feature or group as a numbered section:
+### 3. Numbered User-Facing Feature Sections
+Format each major user-visible feature or capability as a numbered section:
 
 ```markdown
-### <N>. <Feature Group or Milestone Title>
+### <N>. <Feature or Capability Title>
 
 * <Sub-Topic / Functional Area>:
 
-  * PR: 🐙#<PR_NUMBER> — `<commit_type>(<scope>): <short description>`
+  * PR: [🐙#<PR_NUMBER>](https://github.com/<owner>/<repo>/pull/<PR_NUMBER>) — `<commit_type>(<scope>): <short description>`
   * What it does:
-    ▪ <Core user-facing behavior, problem solved, or what changed in the product experience.>
+    ▪ <Core user-facing behavior, problem solved, or what changed in the UI / product experience.>
     ▪ <Technical detail, architecture, safeguards, or under-the-hood implementation highlight.>
 ```
 
-If multiple PRs contribute to the same section, nest them under their respective `* <Sub-Topic>:` blocks.
+If multiple related PRs contribute to the same area, nest them under their respective `* <Sub-Topic>:` blocks.
 
 ### Rules & Formatting Standards:
-- **Header Emoji**: Always start the main catalog title with `🚀`.
-- **PR / Commit Link**: Prefix GitHub PRs with `🐙#<PR_NUMBER>` (linked if URL available) followed by an em-dash `—` and the exact commit header in inline code format: `` `feat(scope): title` ``. For non-GitHub repos or raw git commits, format as `* Commit: 🐙`<commit_hash>` — `...``.
+- **Header Emoji**: Always start the main catalog title with `# 🚀`.
+- **Embedded PR / Commit Links**: PR numbers MUST be formatted as `[🐙#<PR_NUMBER>](<FULL_PR_URL>)` followed by an em-dash `—` and the exact commit header in inline code format: `` `feat(scope): title` ``. For commit SHAs, format as `[🐙`<short_sha>`](<FULL_COMMIT_URL>)`.
 - **What it does block**: Use `* What it does:` followed by indented square black bullets (`▪`) for the explanation items.
 - **Two-part explanation**:
-  1. First `▪` bullet: User-facing benefit, workflow change, or UI capability.
-  2. Second `▪` bullet: Architectural upgrade, technical performance win, or edge-case safeguard.
-
----
-
-## Example Reference
-
-```markdown
-Here is the feature breakdown and changelog of everything merged into `main` since `v0.1.1-nightly.20261018.3285` through `v0.1.2-nightly.20261021.3457` (October 18 – October 21, 2026):
-
-🚀 Project Update Catalog (Nightlies `.3285` → `.3457` & v0.1.1 Release)
-
-### 1. Milestone Release: Version 0.1.1 ( `v0.1.1` )
-
-* Official Stable Rollout:
-
-  * PR: 🐙#22608 — `chore(release): prepare v0.1.1`
-  * What it does:
-    ▪ Official production release consolidating over 200 stability fixes and performance optimizations across web, mobile, and server.
-    ▪ Introduces verified React Compiler compatibility across all views and solidifies Database V2 migration paths.
-
-### 2. Real-Time Command & Terminal Streaming
-
-* Live Output Execution:
-
-  * PR: 🐙#15094 — `fix: command output streams live while it runs`
-  * What it does:
-    ▪ Long-running commands, tests, and builds run by the agent now stream standard output and standard error live in the thread timeline.
-    ▪ Replaces the previous behavior where terminal output blocks were buffered until the process exited, eliminating blank loading periods during builds and test suites.
-```
+  1. First `▪` bullet: User-facing benefit, workflow change, keyboard shortcut, or UI visual capability.
+  2. Second `▪` bullet: Technical mechanics, error handling, performance win, or edge-case behavior.
