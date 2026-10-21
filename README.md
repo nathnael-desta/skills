@@ -111,6 +111,10 @@ before continuing.
   parallel worktrees don't collide. `act.md` covers act's pitfalls and how to
   run act safely.
 
+- `update-catalog` - generate structured, high-signal feature breakdowns,
+  release changelogs, and "what's new" update catalogs for any project,
+  repository, or tool using the standardized Update Catalog format.
+
 ## Development
 
 ```bash
