@@ -2,9 +2,10 @@
 """Report skill copies that should be symlinks into the skills repo.
 
 Usage: check_drift.py [--projects DIR ...] [--all]
+A project copy is fine when the project's skills-lock.json tracks it and it matches the repo.
 Exit 1 when it finds drift (a copy or a broken link), 0 when clean.
 """
-import argparse, hashlib, os, sys
+import argparse, hashlib, json, os, sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -35,7 +36,15 @@ def repo_skills():
     return {p.parent.name for p in REPO.glob("*/SKILL.md")}
 
 
-def scan(folder: Path, repo: set, show_all: bool, project: bool):
+def tracked(root: Path):
+    """Skill names in <root>/skills-lock.json (installed with `skills add`, updated with `skills update -p`)."""
+    try:
+        return set(json.loads((root / "skills-lock.json").read_text())["skills"])
+    except (OSError, ValueError, KeyError):
+        return set()
+
+
+def scan(folder: Path, repo: set, show_all: bool, root: Path = None):
     """Yield (status, line) for each skill entry in a folder."""
     for e in sorted(folder.iterdir()):
         if e.name.startswith(".") or e.name == "synced":
@@ -50,8 +59,16 @@ def scan(folder: Path, repo: set, show_all: bool, project: bool):
         if e.name in repo:
             a, ta = digest(e)
             b, tb = digest(REPO / e.name)
-            fix = "delete it, or refresh it from the repo if it must ship with the project" if project \
-                else f"replace with a symlink to {REPO / e.name}"
+            if root is None:
+                fix = f"replace with a symlink to {REPO / e.name}"
+            elif e.name in tracked(root):
+                fix = "push the repo, then: npx skills update -p -y  (never edit a project copy in place)"
+                if a == b:
+                    if show_all:
+                        yield "ok", f"tracked, same {e}"
+                    continue
+            else:
+                fix = f"untracked: npx skills add nathnael-desta/skills --skill {e.name} -a claude-code codex -y  (writes skills-lock.json; commit it)"
             if a == b:
                 yield "DRIFT", f"COPY (same)    {e}  -> {fix}"
             else:
@@ -67,15 +84,15 @@ def main():
     ap.add_argument("--all", action="store_true", help="also list local-only skills and external links")
     args = ap.parse_args()
     repo, drift = repo_skills(), 0
-    folders = [(HOME / d, False) for d in AGENT_DIRS]
+    folders = [(HOME / d, None) for d in AGENT_DIRS]
     for proj in args.projects or [os.getcwd()]:
-        folders += [(Path(proj).expanduser() / d, True) for d in PROJECT_DIRS]
+        folders += [(Path(proj).expanduser() / d, Path(proj).expanduser()) for d in PROJECT_DIRS]
     seen = set()
-    for f, project in folders:
+    for f, root in folders:
         if not f.is_dir() or f.is_symlink() or f.resolve() in seen:
             continue
         seen.add(f.resolve())
-        rows = list(scan(f, repo, args.all, project))
+        rows = list(scan(f, repo, args.all, root))
         if rows:
             print(f"\n{f}")
             for status, line in rows:
