@@ -115,6 +115,14 @@ before continuing.
   release changelogs, and "what's new" update catalogs for any project,
   repository, or tool using the standardized Update Catalog format.
 
+- `codex-code-review` - review local repository changes with the OpenAI Codex
+  CLI: staged, branch-diff, security and performance reviews, with review prompts
+  and a runner script.
+- `skills-keeping` - where skills live and how they stay in sync: this repo is
+  the single editable source, every agent folder holds symlinks into it. How to
+  add a skill, check drift with `scripts/check_drift.py`, and set up another
+  machine.
+
 ## Development
 
 ```bash

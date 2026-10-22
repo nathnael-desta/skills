@@ -1,7 +1,9 @@
 # Installation and Lifecycle
 
 Vercel Skills is the supported installer for this repository. Do not manually
-copy individual skill directories into agent-specific locations.
+copy individual skill directories into agent-specific locations. On the machine
+that develops these skills, agent folders hold symlinks into the clone instead;
+see the `skills-keeping` skill.
 
 ## Interactive installation
 
