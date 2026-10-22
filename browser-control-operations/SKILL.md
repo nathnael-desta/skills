@@ -86,7 +86,7 @@ Image reads are the largest token cost in practice. Take one for:
 - final confirmation
 
 ```js
-await page.screenshot({ path: "/home/<user>/temp/<task>/after.png", style: "[id^=__browser_control]{display:none!important}" })
+await page.screenshot({ path: "<home>/temp/<task>/after.png", style: "[id^=__browser_control]{display:none!important}" })
 ```
 
 - `style` hides the agent cursor and session pill.

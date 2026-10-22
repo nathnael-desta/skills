@@ -36,16 +36,17 @@ could have fixed is a failed run.
 - **Only these stay open, each with a stated reason:** owner decisions, missing data or environment, backend or production concerns outside this task.
 - **A fix is not done until you re-ran the path in the browser** and captured a fresh After (or a measurement). A claimed fix without one is `unverified`, never `fixed`.
 - **A product call is still fixed.** Where a documented decision conflicts with the user's own stated rule, fix toward the user's rule and flag it in the section (`fixed`, plus the note), instead of leaving it open.
-- **Loop:** walk, catalog, fix, re-walk. Stop on one fully clean pass, or when only the open kinds above remain. About 3 loops at most, then report what is left as it is.
+- **Loop:** walk, catalog, fix, re-walk. The re-walk *is* the next loop's walk: any new or surviving bug goes back into the catalog and gets fixed, then walked again. There is no fixed number of loops. Stop on one fully clean pass, or when only the open kinds above remain.
+- **Runaway guard:** if the same item still fails after two fix attempts, or two passes in a row find no fewer problems than the one before, stop looping on it and report it open with the reason.
 
-**Verdict: catalog first, fix in batches, re-walk once.** Do not fix as you meet each problem.
-- During the walk only record: a screenshot plus one line per problem in `issues.md` (or the manifest).
+**Verdict: catalog first, fix in batches, then walk again.** Do not fix as you meet each problem.
+- During a walk only record: a screenshot plus one line per problem in `issues.md` (or the manifest).
 - After the walk, fix in batches grouped by file or component. Cataloguing first exposes shared
   causes, so one fix closes several findings, and it keeps the walk on one stable build so the
   later Befores still match what the user saw.
-- Then re-walk *everything* once: it proves each fix and catches regressions the fixes caused.
+- Re-walk *everything*, not only the fixed items: it proves each fix and catches regressions the fixes caused.
 - **Exception:** a blocker that stops the walk (login broken, page crashes) is fixed at once.
-- **Keep it cheap** (per `~/.claude/modes/active.md`): a Haiku agent walks and captures, a Sonnet or main agent fixes, and Haiku re-walks. Fixing never goes to the capture agent.
+- **Keep it cheap** (per `~/.claude/modes/active.md`): a Haiku agent walks and captures. Fixing is a separate job so the walk's window is not filled with code: small, clearly specified fixes (copy, a one-file CSS or prop change; give it the issue line and the file) go to Haiku, which is cheaper and quicker than the big model reading the file. Cross-file, logic or behaviour changes, or anything Haiku got wrong once, go to Sonnet or the main agent. Haiku re-walks.
 
 ## Lean rules
 
@@ -127,7 +128,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 - **One combined report per subject**, not one file per agent. Merge the per-agent specs into one `spec.json`.
 - **Show it inline.** In T3 Code the embed goes into the chat via `html_render`; a link alone is not enough.
 - **Split by area, never by size.** Over ~15 sections, give each flow a `"group"` ("Buyer", "Coupons admin", "Users and referrals") and build with `--split`: one part per group plus a short index (counts by status, section titles). Show each part inline, index first.
-- Every embed page already has a sticky jump bar (counts by status, numbered links) and a 680px scroll box, so a long part stays short in the chat.
+- **Jump bar:** every page, standalone and embed, opens with a sticky bar: counts by status (e.g. "3 fixed"), then one numbered, status-coloured link per section, so the reader jumps to any section from anywhere in the report. Keep section titles short; they show on hover. Embeds also sit in a 680px scroll box, so a long part stays short in the chat.
 
 ## Build the report
 
@@ -141,7 +142,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
    - Colours come from T3 theme variables (`--accent`, `--card`, `--border`, `--ring`, ...), never hardcoded.
    - `html_render` rejects `vh`/`dvh` units and `height:100%` on html or body, which is why the scroll box is in px. Keep it that way.
    - Limits: 10 MiB per image, 25 MiB per page once inlined. Clicking a shot turns on a magnifier lens (+ / - power, Esc off).
-   - Check: the stored page `~/.t3/userdata/attachments/<id>.html` has one `data:image/` per step and no `/home/` paths. `html_preview` proves nothing, it reads local paths.
+   - Check: the stored page `~/.t3/userdata/attachments/<id>.html` has one `data:image/` per step and no local absolute paths left (grep for your home folder). `html_preview` proves nothing, it reads local paths.
 
 ## Honesty section is mandatory
 
