@@ -115,6 +115,9 @@ before continuing.
   release changelogs, and "what's new" update catalogs for any project,
   repository, or tool using the standardized Update Catalog format.
 
+- `claude-mode` - switch Claude Code between lean and burn cost modes (needs the
+  machine-local `claude-mode` script).
+
 - `codex-code-review` - review local repository changes with the OpenAI Codex
   CLI: staged, branch-diff, security and performance reviews, with review prompts
   and a runner script.
