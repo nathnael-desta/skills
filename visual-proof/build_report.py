@@ -3,9 +3,11 @@
 
 usage: python3 -I build_report.py spec.json out.html            # standalone report
        python3 -I build_report.py spec.json embed.html --embed    # T3 html_render
+       python3 -I build_report.py spec.json out.html --embed --split
+           # one page per flow "group" (out-<group>.html) plus an index (out.html)
 
 spec = {"title": str, "note": str,
-        "flows": [{"title": str, "status": str, "steps": [step, ...]}],  # status optional
+        "flows": [{"title": str, "status": str, "group": str, "steps": [step, ...]}],  # status, group optional
         "asks": [{"quote": str, "on": str, "did": str, "flow": int|None, "status": str}],
         # asks = the user's requests: "quote" = their exact words, "on" = what it was attached to
         # (optional), "did" = what you did, "flow" = 1-based section whose screenshots show it;
@@ -14,13 +16,21 @@ spec = {"title": str, "note": str,
         "limits": [str]}          # limits = honest "not verified / known gaps"
 step = {"img": "/abs.png", "caption": str}                        # one screenshot
      | {"before": "/abs.png", "after": "/abs.png", "caption": str}  # drag-to-compare
+# optional on a step: "detail": str = the technical evidence (numbers, DOM text, file names) in small
+# muted type under the shot, so "caption" stays plain words. Optional on a flow: "summary": str =
+# one plain sentence under the title saying what the section is about and how it ended.
+
+Every page opens with a sticky jump bar (counts by status, a numbered link per section). The
+embed keeps its height bounded: the sections scroll inside a fixed-height box (html_render
+rejects vh units and fits the frame to the page, so the cap is in px). Before/after pairs
+are letterboxed, never cropped; the builder warns when the two sizes differ by over 3%.
 
 Standalone: one self-contained file (images as base64 JPEG). Clicking a shot opens a
 full-window viewer (arrows / Esc, click to zoom 1:1, drag to pan). Linked from a chat
 reply as a plain absolute path to the .html, T3 opens it in its side browser panel.
 Nothing here enters the model's context: do not Read the output.
 
---embed: small JPEGs next to the output (embed-img/NN.jpg) and a page that references
+--embed: small JPEGs next to the output (embed-img/<name>/NN.jpg) and a page that references
 them by LITERAL absolute path in src="...". T3's html_render inlines only literal
 absolute image paths (a regex over the HTML); a path assembled in JS stays broken.
 In the chat frame a click turns on a magnifier lens (+ / - power, Esc off);
@@ -45,6 +55,8 @@ h1{font-size:26px;margin:0 0 8px}.note{color:var(--muted-foreground);margin:0 0 
 CSS = """body{margin:0;font-family:var(--font-sans);color:var(--foreground)}
 .flow{margin:0 0 30px}
 .flow h3{font-size:20px;font-weight:700;margin:0 0 2px;color:var(--accent,var(--primary))}
+.sum{font-size:15px;line-height:1.55;margin:0 0 6px}
+.detail{font-size:12.5px;line-height:1.5;color:var(--muted-foreground);margin:10px 0 0}
 .hint{font-size:13px;color:var(--muted-foreground);margin:0 0 12px}
 .row{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:10px;scrollbar-width:thin}
 .card{flex:0 0 min(92%,1000px);scroll-snap-align:start;margin:0;padding:12px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);box-sizing:border-box}
@@ -54,23 +66,34 @@ CSS = """body{margin:0;font-family:var(--font-sans);color:var(--foreground)}
 .shot{border-radius:var(--radius);overflow:hidden;cursor:zoom-in;user-select:none}
 .shot img{width:100%;display:block;-webkit-user-drag:none}
 ul{font-size:14px;line-height:1.6;color:var(--muted-foreground);padding-left:20px}
+.flow{scroll-margin-top:56px}
+.jump{position:sticky;top:0;z-index:5;display:flex;gap:6px;align-items:center;overflow-x:auto;white-space:nowrap;padding:8px 12px;margin:0 0 14px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;scrollbar-width:thin}
+.jump .cnt{display:inline-flex;gap:5px;align-items:center;margin-right:6px;font-weight:600}
+.jump .cnt::before,.jump a::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c,var(--border))}
+.jump a{display:inline-flex;gap:4px;align-items:center;padding:2px 8px;border:1px solid var(--border);border-radius:999px;color:inherit;text-decoration:none}
+.jump a:hover{border-color:var(--ring)}.jump .sep{width:1px;align-self:stretch;background:var(--border);margin:0 4px}
+.part{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border)}
+.part h3{margin:0}.part ol{margin:4px 0 0;padding-left:22px;width:100%;color:inherit;font-size:14px}
 .st{display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin-left:10px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--c);color:var(--foreground)}
 .st::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}"""
 
 # Issue status -> theme colour. Colour sits on the border and dot, never a fill.
 STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--warning",
-          "not fixed": "--destructive", "not reproduced": "--muted-foreground"}
+          "not fixed": "--destructive", "unverified": "--warning", "not reproduced": "--muted-foreground"}
 
 # Embed: click a shot to turn on a magnifier lens that follows the pointer; click again,
 # Esc or leaving the shot turns it off, and + / - change the power. History: in-place
 # zoom cropped the shot (the frame is narrower than it) and fought the wheel; an
 # always-on hover lens got in the way. On-demand lens is what stuck. For a wider view
 # the user hovers the embed and uses T3's own "Open in panel" button.
-EMBED_CSS = """.shot{position:relative;cursor:zoom-in}.shot.on{cursor:none}
+EMBED_CSS = """.scroller{max-height:680px;overflow-y:auto;position:relative;padding:0 12px 12px;border:1px solid var(--border);border-radius:var(--radius);scrollbar-width:thin}
+.scroller .jump{margin:0 -12px 14px;border-radius:var(--radius) var(--radius) 0 0;border-width:0 0 1px}
+.shot{position:relative;cursor:zoom-in}.shot.on{cursor:none}
 .lens{position:absolute;border-radius:var(--radius);border:2px solid var(--ring);box-shadow:0 8px 28px color-mix(in srgb,var(--foreground) 30%,transparent);background-repeat:no-repeat;background-color:var(--card);pointer-events:none;display:none;z-index:3}
 .shot.on .lens{display:block}
 .lens b{position:absolute;right:6px;bottom:6px;font:700 11px var(--font-sans);padding:1px 6px;border-radius:999px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border)}"""
-EMBED_JS = """(()=>{let K=2.5,on=null;const off=()=>{if(on)on.classList.remove('on');on=null};
+EMBED_JS = """(()=>{const sc=document.querySelector('.scroller'),jb=sc.querySelector('.jump');jb.addEventListener('click',e=>{const a=e.target.closest('a[href^="#flow"]');if(!a)return;e.preventDefault();const t=sc.querySelector(a.getAttribute('href'));sc.scrollTo({top:t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-jb.offsetHeight-8,behavior:'smooth'})});})();
+(()=>{let K=2.5,on=null;const off=()=>{if(on)on.classList.remove('on');on=null};
 const move=(s,e)=>{const im=s.querySelector('img'),l=s.querySelector('.lens'),r=im.getBoundingClientRect(),W=Math.min(420,r.width*.55),H=W*.62,x=e.clientX-r.left,y=e.clientY-r.top;
 Object.assign(l.style,{width:W+'px',height:H+'px',left:Math.min(Math.max(x-W/2,0),r.width-W)+'px',top:Math.min(Math.max(y-H/2,0),r.height-H)+'px',backgroundImage:'url("'+im.currentSrc+'")',backgroundSize:r.width*K+'px auto',backgroundPosition:(W/2-x*K)+'px '+(H/2-y*K)+'px'});l.firstChild.textContent=K+'\u00d7'};
 document.querySelectorAll('.shot:not(.cmp)').forEach(s=>{const l=document.createElement('div');l.className='lens';l.append(document.createElement('b'));s.append(l);let last;
@@ -80,9 +103,13 @@ s._k=()=>last&&move(s,last)});
 document.addEventListener('keydown',e=>{if(!on)return;if(e.key==='Escape')off();else if(e.key==='+'||e.key==='='){K=Math.min(5,K+.5);on._k()}else if(e.key==='-'){K=Math.max(1.5,K-.5);on._k()}})})();"""
 
 # Before/after: both shots stacked, the "after" clipped by a slider. Same route, same
-# viewport, same state, or the two will not line up.
-CMP_CSS = """.cmp{position:relative;overflow:hidden;border-radius:var(--radius);cursor:ew-resize}.cmp img{width:100%;display:block}
-.cmp .after{position:absolute;inset:0;height:100%;object-fit:cover;object-position:top;clip-path:inset(0 0 0 var(--x,50%))}
+# viewport, same state, or the two will not line up. The box takes the taller of the two
+# (at equal width) and both are letterboxed inside it with object-fit:contain, top-aligned:
+# at the same scale, never cropped. (It used to be object-fit:cover, which cut the After
+# whenever its aspect ratio differed from the Before's.)
+CMP_CSS = """.cmp{position:relative;overflow:hidden;border-radius:var(--radius);cursor:ew-resize;background:color-mix(in srgb,var(--foreground) 7%,var(--card))}
+.cmp img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain;object-position:top;background:color-mix(in srgb,var(--foreground) 7%,var(--card))}
+.cmp .after{clip-path:inset(0 0 0 var(--x,50%))}
 .cmp .bar{position:absolute;top:0;bottom:0;left:var(--x,50%);width:2px;background:var(--ring);pointer-events:none}
 .cmp .tag{position:absolute;top:8px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);pointer-events:none}
 .cmp .tb{left:8px}.cmp .ta{right:8px}
@@ -143,17 +170,102 @@ def jpeg(path, width, quality):
     return buf.getvalue()
 
 
-def build(spec, out_path, embed):
+SIZE_TOLERANCE = 0.03  # warn when a before/after pair differs in width or height by more than this
+
+
+def check_pair(label, st):
+    """Warn about a Before/After pair that was not shot the same way. The slider
+    letterboxes, so nothing is cut, but a different size means a different viewport,
+    zoom, crop or scroll, and the pair will not line up."""
+    (bw, bh), (aw, ah) = Image.open(st["before"]).size, Image.open(st["after"]).size
+    dw, dh = abs(aw - bw) / bw, abs(ah - bh) / bh
+    if dw > SIZE_TOLERANCE or dh > SIZE_TOLERANCE:
+        print(f"warning: {label}: before is {bw}x{bh}, after is {aw}x{ah} "
+              f"(width {dw:.0%}, height {dh:.0%} apart): retake with the same viewport, crop and scroll",
+              file=sys.stderr)
+
+
+def pair_ratio(st):
+    """aspect-ratio (w/h) for the compare box: the taller of the two at equal width."""
+    ratios = [Image.open(st[k]).height / Image.open(st[k]).width for k in ("before", "after")]
+    return f"1000/{round(1000 * max(ratios))}"
+
+
+def jump_bar(flows, href=lambda i: f"#flow{i}", static=False, pills=True):
+    """Strip of counts by status, then a numbered link per section (href None: plain
+    labels). Sticky unless static."""
+    counts = {}
+    for f in flows:
+        if f.get("status"):
+            counts[f["status"]] = counts.get(f["status"], 0) + 1
+    cnt = "".join(f'<span class=cnt style="--c:var({STATUS[k]})">{v} {E(k)}</span>' for k, v in counts.items())
+    tag, attr = ("a", lambda i: f' href="{href(i)}"') if href else ("span", lambda i: "")
+    links = "".join(f'<{tag}{attr(i)} title="{E(f["title"])}"'
+                    + (f' style="--c:var({STATUS[f["status"]]})"' if f.get("status") else "")
+                    + f">{i}</{tag}>" for i, f in enumerate(flows, 1)) if pills else ""
+    style = ' style="position:static;margin:0;border:0;padding:6px 0;background:none"' if static else ""
+    return f'<nav class=jump{style}>{cnt}{"<span class=sep></span>" if cnt and links else ""}{links}</nav>'
+
+
+def slug(text):
+    return "".join(c if c.isalnum() else "-" for c in text.lower()).strip("-") or "part"
+
+
+def split_spec(spec):
+    """One sub-spec per flow 'group' (in first-seen order). Asks are re-pointed at the
+    flow's new number; asks with flow None stay in the index only."""
+    order, groups = [], {}
+    for fi, f in enumerate(spec["flows"], 1):
+        g = f.get("group") or "Other"
+        if g not in groups:
+            order.append(g); groups[g] = []
+        groups[g].append(fi)
+    parts = []
+    for g in order:
+        idx = groups[g]
+        asks = [dict(a, flow=idx.index(a["flow"]) + 1) for a in spec.get("asks") or [] if a.get("flow") in idx]
+        parts.append((g, {"title": f"{spec['title']}: {g}", "flows": [spec["flows"][i - 1] for i in idx],
+                          "asks": asks, "allow_low_res": spec.get("allow_low_res")}))
+    return parts
+
+
+def build_index(spec, parts, out_path, embed, names):
+    """The index page: one block per part with its counts by status and its sections. No images."""
+    head = CSS + (EMBED_CSS if embed else FALLBACK_VARS)
+    out = [f"<!doctype html><html><head><meta charset=utf-8><title>{E(spec['title'])}</title><style>{head}</style></head><body>"]
+    out.append("<div class=scroller>" if embed else f"<h1>{E(spec['title'])}</h1>")
+    if spec.get("note") and not embed:
+        out.append(f"<p class=note>{E(spec['note'])}</p>")
+    for (g, sub), name in zip(parts, names):
+        flows = sub["flows"]
+        title = f'<a href="{E(name)}">{E(g)}</a>' if not embed else E(g)
+        bar = jump_bar(flows, static=True, pills=False)
+        out.append(f'<div class=part><h3>{title}</h3>{bar}<ol>'
+                   + "".join(f'<li>{E(f["title"].removeprefix(g + ": "))}' + (f'<span class=st style="--c:var({STATUS[f["status"]]})">{E(f["status"])}</span>' if f.get("status") else "") + "</li>" for f in flows)
+                   + "</ol></div>")
+    if spec.get("limits"):
+        out.append("<section class=flow><h3>Not verified / known limits</h3><ul>" + "".join(f"<li>{E(x)}</li>" for x in spec["limits"]) + "</ul></section>")
+    out.append("</div></body></html>" if embed else "</body></html>")
+    open(out_path, "w").write("".join(out))
+    print(f"index, {len(parts)} parts -> {out_path}")
+
+
+def build(spec, out_path, embed, with_limits=True):
     check_resolution(spec)
-    img_dir = os.path.join(os.path.dirname(os.path.abspath(out_path)), "embed-img")
+    stem = os.path.splitext(os.path.basename(out_path))[0]
+    img_dir = os.path.join(os.path.dirname(os.path.abspath(out_path)), "embed-img", stem)
     if embed:
         os.makedirs(img_dir, exist_ok=True)
+        if len(spec["flows"]) > 15:
+            print(f"warning: {len(spec['flows'])} sections in one embed page; split by area: give flows a 'group' and "
+                  "use --split (see SKILL.md 'One report, shown in the chat')", file=sys.stderr)
     head = CSS + CMP_CSS + (EMBED_CSS if embed else FALLBACK_VARS + VIEWER_CSS)
     out = [f"<!doctype html><html><head><meta charset=utf-8><title>{E(spec['title'])}</title><style>{head}</style></head><body>"]
     if not embed:
         out.append(f"<h1>{E(spec['title'])}</h1>")
         if spec.get("note"):
             out.append(f"<p class=note>{E(spec['note'])}</p>")
+    out.append(jump_bar(spec["flows"]) if embed is False else "<div class=scroller>" + jump_bar(spec["flows"]))
 
     asks = spec.get("asks") or []
     nflows = len(spec["flows"])
@@ -195,22 +307,27 @@ def build(spec, out_path, embed):
         st = flow.get("status")
         if st and st not in STATUS:
             sys.exit(f"unknown status {st!r} in {flow['title']!r}; use one of {sorted(STATUS)}")
+        summ = f'<p class=sum>{E(flow["summary"])}</p>' if flow.get("summary") else ""
         chip = f'<span class=st style="--c:var({STATUS[st]})">{E(st)}</span>' if st else ""
-        out.append(f'<section class=flow id=flow{fi}><h3>{fi} &middot; {E(flow["title"])}{chip}</h3><p class=hint>{len(steps)} step{"s" * (len(steps) != 1)}{" &rarr; scroll sideways" if len(steps) > 1 else ""}{tip}</p>{ask_html(fi)}<div class=row>')
+        out.append(f'<section class=flow id=flow{fi}><h3>{fi} &middot; {E(flow["title"])}{chip}</h3>{summ}<p class=hint>{len(steps)} step{"s" * (len(steps) != 1)}{" &rarr; scroll sideways" if len(steps) > 1 else ""}{tip}</p>{ask_html(fi)}<div class=row>')
         for i, s in enumerate(steps, 1):
             n += 1
             if "before" in s:
-                shot = (f'<div class="shot cmp"><img class=before data-v=before src="{src(s["before"], f"{n:02d}-before")}" alt="Before">'
+                check_pair(f"section {fi} step {i}", s)
+                shot = (f'<div class="shot cmp" style="aspect-ratio:{pair_ratio(s)}"><img class=before data-v=before src="{src(s["before"], f"{n:02d}-before")}" alt="Before">'
                         f'<img class=after data-v=after src="{src(s["after"], f"{n:02d}-after")}" alt="After">'
                         '<span class=bar></span><span class="tag tb">Before</span><span class="tag ta">After</span>'
                         '<input type=range min=0 max=100 value=50 aria-label="Before / after"></div>')
             else:
                 shot = f'<div class=shot><img src="{src(s["img"], f"{n:02d}")}" alt=""></div>'
+            detail = f'<p class=detail>{E(s["detail"])}</p>' if s.get("detail") else ""
             tall = is_tall(s.get("before") or s["img"])
-            out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption>{shot}</figure>')
+            out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption>{shot}{detail}</figure>')
         out.append("</div></section>")
-    if spec.get("limits"):
+    if with_limits and spec.get("limits"):
         out.append("<section class=flow><h3>Not verified / known limits</h3><ul>" + "".join(f"<li>{E(x)}</li>" for x in spec["limits"]) + "</ul></section>")
+    if embed:
+        out.append("</div>")
     out.append(f"<script>{CMP_JS}</script>")
     if embed:
         out.append(f"<script>{EMBED_JS}</script>")
@@ -224,4 +341,13 @@ def build(spec, out_path, embed):
 
 if __name__ == "__main__":
     spec_path, out_path, *flags = sys.argv[1:]
-    build(json.load(open(spec_path)), out_path, "--embed" in flags)
+    spec, embed = json.load(open(spec_path)), "--embed" in flags
+    if "--split" in flags:
+        parts = split_spec(spec)
+        base, ext = os.path.splitext(out_path)
+        names = [f"{base}-{slug(g)}{ext}" for g, _ in parts]
+        for (g, sub), path in zip(parts, names):
+            build(sub, path, embed, with_limits=False)
+        build_index(spec, parts, out_path, embed, [os.path.basename(x) for x in names])
+    else:
+        build(spec, out_path, embed)
