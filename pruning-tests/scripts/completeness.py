@@ -10,6 +10,7 @@ Verdicts:     <out-dir>/<batch id>.jsonl, one JSON object per test.
 
     completeness.py batches.json --root . --out-dir out --state state.json
 """
+
 import argparse
 import json
 import os
@@ -49,8 +50,12 @@ def main():
     ap.add_argument("--root", default=".")
     ap.add_argument("--out-dir", default="out")
     ap.add_argument("--state", default="state.json")
-    ap.add_argument("--threshold", type=float, default=0.9,
-                    help="fraction of expected tests that counts a batch as done")
+    ap.add_argument(
+        "--threshold",
+        type=float,
+        default=0.9,
+        help="fraction of expected tests that counts a batch as done",
+    )
     args = ap.parse_args()
 
     done, todo = [], []
@@ -62,8 +67,11 @@ def main():
     print(f"done {len(done)}, todo {len(todo)}")
     for batch_id, got, want in todo:
         print(f"  {batch_id}: {got}/{want}")
-    json.dump({"done": [d[0] for d in done], "todo": [t[0] for t in todo]},
-              open(args.state, "w"), indent=1)
+    json.dump(
+        {"done": [d[0] for d in done], "todo": [t[0] for t in todo]},
+        open(args.state, "w"),
+        indent=1,
+    )
     return 1 if todo else 0
 
 

@@ -19,6 +19,7 @@ Verdicts file: JSON list of {"file": "tests/x.py", "test": "name or Class::name"
 
     unique_cov.py .coverage verdicts.json --out unique_cov.json
 """
+
 import argparse
 import collections
 import json
@@ -41,10 +42,17 @@ def main():
     ap.add_argument("coverage_db", help="SQLite .coverage file recorded with --cov-context=test")
     ap.add_argument("verdicts", help="JSON list of per-test verdicts")
     ap.add_argument("--out", default="unique_cov.json")
-    ap.add_argument("--verdicts", dest="kinds", default="delete,merge",
-                    help="comma-separated verdicts treated as candidates")
-    ap.add_argument("--exclude", default=TEST_FILE,
-                    help="regex of measured files to ignore (default: test files)")
+    ap.add_argument(
+        "--verdicts",
+        dest="kinds",
+        default="delete,merge",
+        help="comma-separated verdicts treated as candidates",
+    )
+    ap.add_argument(
+        "--exclude",
+        default=TEST_FILE,
+        help="regex of measured files to ignore (default: test files)",
+    )
     ap.add_argument("--top", type=int, default=25)
     args = ap.parse_args()
 
@@ -72,6 +80,7 @@ def main():
                     covered[(files[fid], n)].add(key)
     else:
         from coverage.numbits import numbits_to_nums
+
         for fid, cid, bits in con.execute("select file_id, context_id, numbits from line_bits"):
             if skip.search(files[fid]):
                 continue
@@ -90,22 +99,30 @@ def main():
     out = []
     for key, row in cand.items():
         lines = unique.get(key, [])
-        out.append({
-            "file": key[0], "test": key[1], "verdict": row["verdict"],
-            "in_coverage": key in seen,  # False: skipped, other suite, or name mismatch
-            "unique_lines": len(lines),
-            "sample": sorted(f"{p}:{n}" for p, n in lines)[:8],
-        })
+        out.append(
+            {
+                "file": key[0],
+                "test": key[1],
+                "verdict": row["verdict"],
+                "in_coverage": key in seen,  # False: skipped, other suite, or name mismatch
+                "unique_lines": len(lines),
+                "sample": sorted(f"{p}:{n}" for p, n in lines)[:8],
+            }
+        )
     json.dump(out, open(args.out, "w"), indent=1)
 
-    print(f"candidates {len(cand)}, found in coverage {len(seen)}, "
-          f"not in coverage {sum(not o['in_coverage'] for o in out)}")
+    print(
+        f"candidates {len(cand)}, found in coverage {len(seen)}, "
+        f"not in coverage {sum(not o['in_coverage'] for o in out)}"
+    )
     tally = collections.Counter((o["verdict"], o["unique_lines"] > 0) for o in out)
     for (verdict, has_unique), n in sorted(tally.items()):
         print(f"  {verdict}: {n} {'with' if has_unique else 'without'} unique lines")
     for o in sorted(out, key=lambda o: -o["unique_lines"])[: args.top]:
         if o["unique_lines"]:
-            print(f"  {o['unique_lines']:4d} {o['verdict']} {o['file']}::{o['test']} {o['sample'][:3]}")
+            print(
+                f"  {o['unique_lines']:4d} {o['verdict']} {o['file']}::{o['test']} {o['sample'][:3]}"
+            )
 
 
 if __name__ == "__main__":

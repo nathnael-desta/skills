@@ -21,6 +21,7 @@ Never change anything before you hold these:
 Workflow YAML for each item: [references/workflow.md](references/workflow.md).
 
 - **One run per change.** `push` triggers only on the default and release branches, `pull_request` covers everything else. Concurrency group keyed on the PR number, `cancel-in-progress: true`. Merge-queue runs get a unique key and are never cancelled.
+- **Don't re-test a merged tree.** If push to the default branch is the deploy gate, let it reuse a PR run that passed on the same git tree hash (`head_commit.tree_id` in the runs API). Find the PR through `commits/{sha}/pulls` (a run's `pull_requests` list empties after merge), and require a job that only runs for PRs into that branch, so a run path-filtered against another base never counts. `skip-duplicate-actions` matches on tree too, but accepts any passing run of the workflow.
 - **Required checks stay honest.** A workflow skipped by `paths:` leaves its required check Pending forever; a job skipped by `if:` reports success. Put path logic in job-level `if:` and require one aggregator job (`if: always()`, `needs: [all jobs]`).
 - **Timeouts on every job.** `timeout-minutes` from measured time plus margin; the default is 360.
 - **Split lint and typecheck** into jobs that install only what they need and run in parallel with the heavy install. A formatter queued behind a multi-GB dependency install wastes minutes. A type checker that needs the dependencies stays with them.
