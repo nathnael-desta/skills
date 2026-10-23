@@ -93,10 +93,6 @@ before continuing.
   the bug first, extend before adding, mock only at system boundaries, red
   before green, and report each new test with the bug it catches. Cites only
   checked evidence.
-- `retro` - retrospective on a coding session: reads the session logs and
-  suggests changes to the agent's environment (navigation, checks, review
-  rules, steering files, tool cost). User-invoked only. Vendored from the
-  routa repo's copy of Matt Pocock's skill.
 - `pruning-tests` - audit an existing suite: cheap-model first pass in
   incremental batches, per-test coverage of the delete and merge candidates,
   a stronger-model re-review, per-file user approval, then parallel apply.
