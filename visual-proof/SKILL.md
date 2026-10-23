@@ -130,7 +130,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 - **One combined report per subject**, not one file per agent. Merge the per-agent specs into one `spec.json`.
 - **Show it inline.** In T3 Code the embed goes into the chat via `html_render`; a link alone is not enough.
 - **Split by area, never by size.** Over ~15 sections, give each flow a `"group"` ("Buyer", "Coupons admin", "Users and referrals") and build with `--split`: one part per group plus a short index (counts by status, section titles). Show each part inline, index first.
-- **Jump bar:** every page, standalone and embed, opens with a sticky bar: counts by status (e.g. "3 fixed"), then one numbered, status-coloured link per section, so the reader jumps to any section from anywhere in the report. Keep section titles short; they show on hover. Embeds also sit in a 680px scroll box, so a long part stays short in the chat.
+- **Jump bar:** every page, standalone and embed, opens with a sticky bar: counts by status (e.g. "3 fixed"), then one numbered, status-coloured link per section, so the reader jumps to any section from anywhere in the report. Keep section titles short; they show on hover. Embeds also sit in a scroll box: 680px inline (so a long part stays short in the chat), and the full window height when opened in the panel or full screen (a script in the page sets it, because `html_render` rejects `vh`). Keep `height` at 760 or below, or the inline frame grows to fit.
 
 ## Build the report
 
@@ -139,7 +139,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
    a step is `{"img":"/abs.png","caption","detail"}` or `{"before":"/abs.png","after":"/abs.png","caption","detail"}` (a drag-to-compare slider). `status`, `summary`, `group` and `detail` are optional.
 2. `python3 -I <skill-dir>/build_report.py spec.json index.html` (needs Python 3 and Pillow: `pip install pillow`; standalone, base64 JPEGs, sticky jump bar). Read the warnings it prints (size mismatch, no ask answered, low res) and fix them.
 3. Give the user a markdown link to the absolute `.html` path (T3 opens it in the side panel; click a shot for the viewer). Never Read the HTML (megabytes of base64).
-4. **In T3 Code (`html_render` exists), also show it inline:** build with `--embed` (add `--split` for several parts; it writes `<base>-<group>.html` plus the index at the given path, images in `embed-img/<name>/`). `cat` the page (a few KB to ~30 KB, no base64) and pass it verbatim as `html_render`'s `html`, with a `title` and `height: 2000`. T3 swaps each image path for its data on the server.
+4. **In T3 Code (`html_render` exists), also show it inline:** build with `--embed` (add `--split` for several parts; it writes `<base>-<group>.html` plus the index at the given path, images in `embed-img/<name>/`). `cat` the page (a few KB to ~30 KB, no base64) and pass it verbatim as `html_render`'s `html`, with a `title` and `height: 760`. T3 swaps each image path for its data on the server.
    - Image paths must be **literal absolute paths in the markup**; a path built in JS shows broken.
    - Colours come from T3 theme variables (`--accent`, `--card`, `--border`, `--ring`, ...), never hardcoded.
    - `html_render` rejects `vh`/`dvh` units and `height:100%` on html or body, which is why the scroll box is in px. Keep it that way.

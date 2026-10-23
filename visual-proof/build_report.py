@@ -86,13 +86,13 @@ STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--war
 # zoom cropped the shot (the frame is narrower than it) and fought the wheel; an
 # always-on hover lens got in the way. On-demand lens is what stuck. For a wider view
 # the user hovers the embed and uses T3's own "Open in panel" button.
-EMBED_CSS = """.scroller{max-height:680px;overflow-y:auto;position:relative;padding:0 12px 12px;border:1px solid var(--border);border-radius:var(--radius);scrollbar-width:thin}
+EMBED_CSS = """.scroller{box-sizing:border-box;max-height:680px;overflow-y:auto;position:relative;padding:0 12px 12px;border:1px solid var(--border);border-radius:var(--radius);scrollbar-width:thin}
 .scroller .jump{margin:0 -12px 14px;border-radius:var(--radius) var(--radius) 0 0;border-width:0 0 1px}
 .shot{position:relative;cursor:zoom-in}.shot.on{cursor:none}
 .lens{position:absolute;border-radius:var(--radius);border:2px solid var(--ring);box-shadow:0 8px 28px color-mix(in srgb,var(--foreground) 30%,transparent);background-repeat:no-repeat;background-color:var(--card);pointer-events:none;display:none;z-index:3}
 .shot.on .lens{display:block}
 .lens b{position:absolute;right:6px;bottom:6px;font:700 11px var(--font-sans);padding:1px 6px;border-radius:999px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border)}"""
-EMBED_JS = """(()=>{const sc=document.querySelector('.scroller'),jb=sc.querySelector('.jump');jb.addEventListener('click',e=>{const a=e.target.closest('a[href^="#flow"]');if(!a)return;e.preventDefault();const t=sc.querySelector(a.getAttribute('href'));sc.scrollTo({top:t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-jb.offsetHeight-8,behavior:'smooth'})});})();
+EMBED_JS = """(()=>{const sc=document.querySelector('.scroller'),jb=sc.querySelector('.jump');const fit=()=>{sc.style.maxHeight=(innerHeight>800?innerHeight-2:680)+'px'};fit();addEventListener('resize',fit);jb.addEventListener('click',e=>{const a=e.target.closest('a[href^="#flow"]');if(!a)return;e.preventDefault();const t=sc.querySelector(a.getAttribute('href'));sc.scrollTo({top:t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-jb.offsetHeight-8,behavior:'smooth'})});})();
 (()=>{let K=2.5,on=null;const off=()=>{if(on)on.classList.remove('on');on=null};
 const move=(s,e)=>{const im=s.querySelector('img'),l=s.querySelector('.lens'),r=im.getBoundingClientRect(),W=Math.min(420,r.width*.55),H=W*.62,x=e.clientX-r.left,y=e.clientY-r.top;
 Object.assign(l.style,{width:W+'px',height:H+'px',left:Math.min(Math.max(x-W/2,0),r.width-W)+'px',top:Math.min(Math.max(y-H/2,0),r.height-H)+'px',backgroundImage:'url("'+im.currentSrc+'")',backgroundSize:r.width*K+'px auto',backgroundPosition:(W/2-x*K)+'px '+(H/2-y*K)+'px'});l.firstChild.textContent=K+'\u00d7'};
