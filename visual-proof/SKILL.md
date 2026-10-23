@@ -1,6 +1,6 @@
 ---
 name: visual-proof
-description: "MANDATORY whenever you change anything the user can see in a browser (UI, copy, layout, a page's behaviour) in answer to their feedback, annotations, screenshots or a fix list, and for any request to walk through, test or show a flow working. Drive the real app, fix what you find, re-walk to prove it, and hand back a side-scrolling HTML report of captioned screenshots and drag-to-compare before/after pairs, one section per issue or flow, with a status. Capture Before shots BEFORE the first edit. For any agent (Claude, Codex, a subagent). Formerly flow-walkthrough."
+description: "MANDATORY whenever you change anything the user can see in a browser (UI, copy, layout, a page's behaviour) in answer to their feedback, annotations, screenshots or a fix list, and for any request to walk through, test or show a flow working. Drive the real app, fix what you find, re-walk to prove it, and hand back a side-scrolling HTML report of captioned screenshots and drag-to-compare before/after pairs, one section per issue or flow, with a status, ending in a checklist of every ask so none is missed; how-it-works questions in the same message get a visual explanation section. Capture Before shots BEFORE the first edit. For any agent (Claude, Codex, a subagent). Formerly flow-walkthrough."
 ---
 
 # Visual proof report
@@ -16,7 +16,7 @@ agent or a subagent; the project's browser rules win (which tool, banned tools, 
 
 Use it whenever a turn changes something a person sees in a browser: UI, copy, layout, styling or
 a page's behaviour. That includes **feedback as annotated screenshots, questions mixed with
-fixes, "fix these", or a pasted list**. A mixed message is still a batch: the fixes need proof, the questions are answered in chat.
+fixes, "fix these", or a pasted list**. A mixed message is still a batch: the fixes need proof, and every question is an ask that gets answered in the chat and listed in the report (see Coverage check; a how-it-works question gets an explanation section).
 
 1. **Before the first edit**, write the asks (exact words) to `<scratch>/asks.md` and capture a
    Before shot of every visual ask. Once the code changes, a Before cannot be recreated cheaply.
@@ -108,11 +108,22 @@ Reports can mix kinds. Every section gets an honest `status`: `fixed`, `partial`
 A pair's caption says what changed ("Approve stays disabled until an ID is uploaded"), not "after".
 
 **Coverage check (batches).** The user may never reread their prompt, so a dropped ask is invisible.
-Inline comments, annotations, "also do X" asides and questions each count as an ask.
+Inline comments, annotations, "also do X" asides and **questions** each count as an ask.
 1. Write each ask with the user's **exact words** and what it was attached to to `asks.md` (say so if an annotation is unreadable).
 2. Before building, reread the original message (not your memory of it) against the list.
-3. Put the screenshot-able ones in the spec: `"asks":[{"quote","on","did","flow":3,"status"}]`. `flow` is the section showing it. The builder warns about a section that answers no ask. Questions and non-visual asks (`flow: null`) are answered in chat.
-4. Undone or partial asks still appear. Never drop one.
+3. Put **every** ask in the spec, none left out: `"asks":[{"quote","on","did","flow":3,"status"}]`. `status` is required (same words as a section's). `flow` is the section that shows it, or `null` for a question or non-visual ask, which you also answer in full in the chat. The builder warns about a section that answers no ask and refuses an ask with no status.
+4. The report ends with an **Everything you asked** checklist: each ask once, its status, where it is shown ("section 3", or "answered in the chat"). Undone or partial asks still appear. Never drop one.
+5. In the reply, after the report, state the count against your reread: "9 of 9 asks covered: 6 fixed, 2 answered, 1 needs your decision".
+
+## Explanations (how-it-works questions)
+
+When an ask is "how does X work?", "why does it do Y?" or "explain Z", answer it in the report as its own section, `status: "answered"`, so it sits in the same place as the fixes. Use `html` steps instead of screenshots:
+
+- A step is `{"html":"<div class=x-row>...</div>","caption":"..."}`. Build it from the kit: `.x-row` of `.x-box` joined by `<span class=x-arrow>&rarr;</span>`, `.x-box.hot` for the key one, `.x-note` for the small print, `.x-code` for code, inline `<svg viewBox>` for diagrams (use `currentColor`; it follows light and dark). Colours only from theme variables; no `<script>`, `on*=` handlers or `javascript:` links (the builder refuses them).
+- **Ground it in the real thing.** Read the code, the schema or the run first, and use the real names, files and numbers. An explanation from memory is a guess, so say so in `limits`.
+- **Detailed, not simplified.** The reader is smart and busy, not a beginner. Show the actual stages, the actual data and what breaks or branches; one concept per card, 3 to 5 cards, the cards left to right in the order the thing happens. No analogies standing in for the mechanism.
+- Cost: a detailed card is about 500 to 1,500 tokens of HTML, paid twice (once in the spec, once passed to `html_render`). Two or three cards cost less than reading one screenshot. Skip a diagram when two sentences in the chat explain it.
+- A turn with only explanations and no UI change needs no report: use `html_render` directly (see `t3-visualize`), same kit.
 
 ## Write for the reader
 
@@ -136,8 +147,8 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 
 1. Write `<scratch>/spec.json`:
    `{"title","note","asks":[...],"flows":[{"title","summary","status","group","steps":[...]}],"limits":[...]}`;
-   a step is `{"img":"/abs.png","caption","detail"}` or `{"before":"/abs.png","after":"/abs.png","caption","detail"}` (a drag-to-compare slider). `status`, `summary`, `group` and `detail` are optional.
-2. `python3 -I <skill-dir>/build_report.py spec.json index.html` (needs Python 3 and Pillow: `pip install pillow`; standalone, base64 JPEGs, sticky jump bar). Read the warnings it prints (size mismatch, no ask answered, low res) and fix them.
+   a step is `{"img":"/abs.png","caption","detail"}`, `{"before":"/abs.png","after":"/abs.png","caption","detail"}` (a drag-to-compare slider) or `{"html","caption"}` (an explanation). `status`, `summary`, `group` and `detail` are optional; every ask needs a `status`.
+2. `python3 -I <skill-dir>/build_report.py spec.json index.html` (needs Python 3 and Pillow: `pip install pillow`; standalone, base64 JPEGs, sticky jump bar). Read the warnings it prints (size mismatch, no ask answered, low res) and fix them. It also stops on an ask with no status and on unsafe explanation HTML.
 3. Give the user a markdown link to the absolute `.html` path (T3 opens it in the side panel; click a shot for the viewer). Never Read the HTML (megabytes of base64).
 4. **In T3 Code (`html_render` exists), also show it inline:** build with `--embed` (add `--split` for several parts; it writes `<base>-<group>.html` plus the index at the given path, images in `embed-img/<name>/`). `cat` the page (a few KB to ~30 KB, no base64) and pass it verbatim as `html_render`'s `html`, with a `title` and `height: 760`. T3 swaps each image path for its data on the server.
    - Image paths must be **literal absolute paths in the markup**; a path built in JS shows broken.

@@ -9,12 +9,15 @@ usage: python3 -I build_report.py spec.json out.html            # standalone rep
 spec = {"title": str, "note": str,
         "flows": [{"title": str, "status": str, "group": str, "steps": [step, ...]}],  # status, group optional
         "asks": [{"quote": str, "on": str, "did": str, "flow": int|None, "status": str}],
-        # asks = the user's requests: "quote" = their exact words, "on" = what it was attached to
-        # (optional), "did" = what you did, "flow" = 1-based section whose screenshots show it;
-        # it is printed inside that section. flow None = a question or non-visual ask: it is NOT
-        # in the report, so answer it in the chat, quoting the words.
+        # asks = EVERY request the user made, questions included: "quote" = their exact words,
+        # "on" = what it was attached to (optional), "did" = what you did or the answer in a
+        # sentence or two, "status" = required (done, answered, partial, not done, ...), "flow" =
+        # 1-based section that shows it (printed inside that section), or None for a question or
+        # non-visual ask. The report ends with an "Everything you asked" checklist of all of them,
+        # so a dropped ask is visible. flow None: also answer it in full in the chat.
         "limits": [str]}          # limits = honest "not verified / known gaps"
 step = {"img": "/abs.png", "caption": str}                        # one screenshot
+     | {"html": "<div class=x-row>...</div>", "caption": str}      # an explanation (see XP_CSS)
      | {"before": "/abs.png", "after": "/abs.png", "caption": str}  # drag-to-compare
 # optional on a step: "detail": str = the technical evidence (numbers, DOM text, file names) in small
 # muted type under the shot, so "caption" stays plain words. Optional on a flow: "summary": str =
@@ -40,19 +43,32 @@ Colours: both modes use T3's theme variable names. The embed gets T3's live valu
 the standalone file defines neutral light/dark fallbacks for the same names. Never
 hardcode a colour anywhere else.
 """
-import base64, html, io, json, os, sys
+import base64, html, io, json, os, re, sys
 from PIL import Image
 
 E = html.escape
 
 # Fallback values for T3's theme variables, standalone report only. In the embed T3
 # injects these itself; defining them there would override the user's theme.
-FALLBACK_VARS = """:root{color-scheme:light dark;--background:#fafafa;--foreground:#18181b;--card:#fff;--card-foreground:#18181b;--muted-foreground:#71717a;--border:#e4e4e7;--ring:#3b82f6;--accent:#2563eb;--accent-foreground:#fff;--success:#16a34a;--warning:#d97706;--destructive:#dc2626;--radius:8px;--font-sans:system-ui,sans-serif}
-@media (prefers-color-scheme:dark){:root{--background:#0c0c0f;--foreground:#f4f4f5;--card:#17171c;--card-foreground:#f4f4f5;--muted-foreground:#a1a1aa;--border:#2a2a32;--ring:#60a5fa;--accent:#60a5fa;--accent-foreground:#0c0c0f;--success:#4ade80;--warning:#fbbf24;--destructive:#f87171}}
+FALLBACK_VARS = """:root{color-scheme:light dark;--background:#fafafa;--foreground:#18181b;--card:#fff;--card-foreground:#18181b;--muted-foreground:#71717a;--border:#e4e4e7;--ring:#3b82f6;--accent:#2563eb;--accent-foreground:#fff;--success:#16a34a;--info:#0284c7;--warning:#d97706;--destructive:#dc2626;--radius:8px;--font-sans:system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root{--background:#0c0c0f;--foreground:#f4f4f5;--card:#17171c;--card-foreground:#f4f4f5;--muted-foreground:#a1a1aa;--border:#2a2a32;--ring:#60a5fa;--accent:#60a5fa;--accent-foreground:#0c0c0f;--success:#4ade80;--info:#38bdf8;--warning:#fbbf24;--destructive:#f87171}}
 body{background:var(--background);padding:24px;max-width:1400px;margin:0 auto}
 h1{font-size:26px;margin:0 0 8px}.note{color:var(--muted-foreground);margin:0 0 24px}"""
 
-CSS = """body{margin:0;font-family:var(--font-sans);color:var(--foreground)}
+# Kit for explanation steps ({"html": ...}): boxes in a row joined by arrows, notes, code.
+# Agents compose these (or inline SVG with viewBox) instead of styling from scratch.
+XP_CSS = """.card.xp{flex-basis:min(96%,1000px)}
+.xp .x{font-size:14px;line-height:1.55}
+.x-row{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;margin:10px 0}
+.x-box{flex:1 1 150px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:color-mix(in srgb,var(--foreground) 4%,var(--card));font-size:14px;line-height:1.5}
+.x-box b{display:block;margin-bottom:2px}.x-box.hot{border-color:var(--accent)}
+.x-arrow{align-self:center;color:var(--muted-foreground);font-size:18px}
+.x-note{font-size:13px;line-height:1.5;color:var(--muted-foreground);margin:6px 0}
+.x-code{font-family:var(--font-mono,monospace);font-size:12.5px}
+.xp svg{max-width:100%;height:auto}.xp svg text{fill:currentColor;font-family:var(--font-sans)}
+"""
+
+CSS = XP_CSS + """body{margin:0;font-family:var(--font-sans);color:var(--foreground)}
 .flow{margin:0 0 30px}
 .flow h3{font-size:20px;font-weight:700;margin:0 0 2px;color:var(--accent,var(--primary))}
 .sum{font-size:15px;line-height:1.55;margin:0 0 6px}
@@ -79,7 +95,7 @@ ul{font-size:14px;line-height:1.6;color:var(--muted-foreground);padding-left:20p
 
 # Issue status -> theme colour. Colour sits on the border and dot, never a fill.
 STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--warning",
-          "not fixed": "--destructive", "unverified": "--warning", "not reproduced": "--muted-foreground"}
+          "not fixed": "--destructive", "unverified": "--warning", "answered": "--info", "not reproduced": "--muted-foreground"}
 
 # Embed: click a shot to turn on a magnifier lens that follows the pointer; click again,
 # Esc or leaving the shot turns it off, and + / - change the power. History: in-place
@@ -207,6 +223,39 @@ def jump_bar(flows, href=lambda i: f"#flow{i}", static=False, pills=True):
     return f'<nav class=jump{style}>{cnt}{"<span class=sep></span>" if cnt and links else ""}{links}</nav>'
 
 
+ASK_CSS = """.asklist{list-style:none;margin:0;padding:0}.asklist li{padding:8px 0;border-top:1px solid var(--border);font-size:14px;line-height:1.5;color:var(--foreground)}
+.asklist q{font-weight:600}.asklist .did{display:block;color:var(--muted-foreground)}.asklist a{color:var(--accent);margin-left:8px}.asklist .where{margin-left:8px;color:var(--muted-foreground)}"""
+
+# Active opening of an event handler or script in an explanation: those would run in the report.
+UNSAFE_HTML = re.compile(r"<script|\son\w+\s*=|javascript:", re.I)
+
+
+def ask_checklist(asks, link=None):
+    """The closing 'Everything you asked' section: every ask once, with its status and where
+    it is shown. link(ask) -> (href, label) or None. This is what makes a dropped ask visible."""
+    counts = {}
+    for a in asks:
+        counts[a["status"]] = counts.get(a["status"], 0) + 1
+    bar = "".join(f'<span class=cnt style="--c:var({STATUS[k]})">{v} {E(k)}</span>' for k, v in counts.items())
+    rows = []
+    for a in asks:
+        where = link(a) if link else None
+        rows.append(f'<li><q>{E(a["quote"])}</q><span class=st style="--c:var({STATUS[a["status"]]})">{E(a["status"])}</span>'
+                    + ((f'<a href="{E(where[0])}">{E(where[1])}</a>' if where[0] else f'<span class=where>{E(where[1])}</span>') if where else '<span class=where>answered in the chat</span>')
+                    + f'<span class=did>{E(a["did"])}</span></li>')
+    return (f'<section class=flow id=asks><style>{ASK_CSS}</style><h3>Everything you asked &middot; {len(asks)} ask{"s" * (len(asks) != 1)}</h3>'
+            f'<nav class=jump style="position:static;margin:0 0 8px;border:0;padding:4px 0;background:none">{bar}</nav><ul class=asklist>{"".join(rows)}</ul></section>')
+
+
+def check_asks(asks, nflows):
+    """Every ask needs its words, what was done, a known status and a section (or None)."""
+    bad = [a for a in asks if not a.get("quote") or not a.get("did") or a.get("status") not in STATUS
+           or (a.get("flow") is not None and not 1 <= a["flow"] <= nflows)]
+    if bad:
+        sys.exit("asks need 'quote', 'did', a 'status' (one of %s) and a 'flow' of 1..%d (or null): %r"
+                 % (sorted(STATUS), nflows, bad))
+
+
 def slug(text):
     return "".join(c if c.isalnum() else "-" for c in text.lower()).strip("-") or "part"
 
@@ -243,6 +292,15 @@ def build_index(spec, parts, out_path, embed, names):
         out.append(f'<div class=part><h3>{title}</h3>{bar}<ol>'
                    + "".join(f'<li>{E(f["title"].removeprefix(g + ": "))}' + (f'<span class=st style="--c:var({STATUS[f["status"]]})">{E(f["status"])}</span>' if f.get("status") else "") + "</li>" for f in flows)
                    + "</ol></div>")
+    asks = spec.get("asks") or []
+    check_asks(asks, len(spec["flows"]))
+    if asks:
+        def where(a):
+            if not a.get("flow"):
+                return None
+            g = spec["flows"][a["flow"] - 1].get("group") or "Other"
+            return (names[[x for x, _ in parts].index(g)], g) if not embed else (None, g)
+        out.append(ask_checklist(asks, where))
     if spec.get("limits"):
         out.append("<section class=flow><h3>Not verified / known limits</h3><ul>" + "".join(f"<li>{E(x)}</li>" for x in spec["limits"]) + "</ul></section>")
     out.append("</div></body></html>" if embed else "</body></html>")
@@ -250,7 +308,7 @@ def build_index(spec, parts, out_path, embed, names):
     print(f"index, {len(parts)} parts -> {out_path}")
 
 
-def build(spec, out_path, embed, with_limits=True):
+def build(spec, out_path, embed, with_limits=True, checklist=True):
     check_resolution(spec)
     stem = os.path.splitext(os.path.basename(out_path))[0]
     img_dir = os.path.join(os.path.dirname(os.path.abspath(out_path)), "embed-img", stem)
@@ -269,24 +327,18 @@ def build(spec, out_path, embed, with_limits=True):
 
     asks = spec.get("asks") or []
     nflows = len(spec["flows"])
-    bad = [a for a in asks if not a.get("quote") or not a.get("did")
-           or (a.get("flow") is not None and not 1 <= a["flow"] <= nflows)]
-    if bad:
-        sys.exit("asks need 'quote', 'did' and a 'flow' of 1..%d (or null): %r" % (nflows, bad))
+    check_asks(asks, nflows)
     if asks:
         for i in range(1, nflows + 1):
             if not any(a.get("flow") == i for a in asks):
                 print(f"warning: section {i} answers no ask in 'asks'", file=sys.stderr)
-        for a in asks:
-            if a.get("flow") is None:
-                print(f"not in the report, discuss in chat: {a['quote']!r}", file=sys.stderr)
         out.append("<style>.ask{margin:0 0 12px;padding:2px 0 2px 12px;border-left:3px solid var(--accent,var(--primary))}"
                    ".ask q{display:block;font-weight:600}.ask small{color:var(--muted-foreground)}.ask p{margin:2px 0 0}</style>")
 
     def ask_html(fi):
         return "".join("<div class=ask>" + (f"<small>on: {E(a['on'])}</small>" if a.get("on") else "")
                        + f"<q>{E(a['quote'])}</q><p>{E(a['did'])}"
-                       + (f" &middot; <b>{E(a['status'])}</b>" if a.get("status") else "") + "</p></div>"
+                       + f" &middot; <b>{E(a['status'])}</b></p></div>"
                        for a in asks if a.get("flow") == fi)
 
     def src(path, name):
@@ -302,7 +354,8 @@ def build(spec, out_path, embed, with_limits=True):
     for fi, flow in enumerate(spec["flows"], 1):
         steps = flow["steps"]
         cmp = any("before" in s for s in steps)
-        tip = (" &middot; drag across a shot to compare before and after" if cmp
+        shots_in = any("html" not in s for s in steps)
+        tip = "" if not shots_in else (" &middot; drag across a shot to compare before and after" if cmp
                else " &middot; click a screenshot to magnify, + / &minus; to change" if embed else " &middot; click a screenshot to enlarge")
         st = flow.get("status")
         if st and st not in STATUS:
@@ -312,6 +365,11 @@ def build(spec, out_path, embed, with_limits=True):
         out.append(f'<section class=flow id=flow{fi}><h3>{fi} &middot; {E(flow["title"])}{chip}</h3>{summ}<p class=hint>{len(steps)} step{"s" * (len(steps) != 1)}{" &rarr; scroll sideways" if len(steps) > 1 else ""}{tip}</p>{ask_html(fi)}<div class=row>')
         for i, s in enumerate(steps, 1):
             n += 1
+            if "html" in s:
+                if UNSAFE_HTML.search(s["html"]):
+                    sys.exit(f"section {fi} step {i}: explanation html may not contain <script>, on*= handlers or javascript: links")
+                out.append(f'<figure class="card xp" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption><div class=x>{s["html"]}</div></figure>')
+                continue
             if "before" in s:
                 check_pair(f"section {fi} step {i}", s)
                 shot = (f'<div class="shot cmp" style="aspect-ratio:{pair_ratio(s)}"><img class=before data-v=before src="{src(s["before"], f"{n:02d}-before")}" alt="Before">'
@@ -324,6 +382,8 @@ def build(spec, out_path, embed, with_limits=True):
             tall = is_tall(s.get("before") or s["img"])
             out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption>{shot}{detail}</figure>')
         out.append("</div></section>")
+    if checklist and asks:
+        out.append(ask_checklist(asks, lambda a: (f"#flow{a['flow']}", f"section {a['flow']}") if a.get("flow") else None))
     if with_limits and spec.get("limits"):
         out.append("<section class=flow><h3>Not verified / known limits</h3><ul>" + "".join(f"<li>{E(x)}</li>" for x in spec["limits"]) + "</ul></section>")
     if embed:
@@ -347,7 +407,7 @@ if __name__ == "__main__":
         base, ext = os.path.splitext(out_path)
         names = [f"{base}-{slug(g)}{ext}" for g, _ in parts]
         for (g, sub), path in zip(parts, names):
-            build(sub, path, embed, with_limits=False)
+            build(sub, path, embed, with_limits=False, checklist=False)
         build_index(spec, parts, out_path, embed, [os.path.basename(x) for x in names])
     else:
         build(spec, out_path, embed)
