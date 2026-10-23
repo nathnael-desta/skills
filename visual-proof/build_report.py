@@ -19,7 +19,7 @@ spec = {"title": str, "note": str,
 step = {"img": "/abs.png", "caption": str}                        # one screenshot (a full-page one scrolls in a 620px box)
      | {"html": "<div class=x-row>...</div>", "caption": str}      # an explanation (kit: x-ans, x-steps, x-cols; see XP_CSS)
      | {"before": "/abs.png", "after": "/abs.png", "caption": str}  # drag-to-compare
-     # add "full_page": true to a pair whose Before and After are full-page captures: a different height is then fine
+     # a pair of full-page captures (taller than 1.8x their width, or "full_page": true) may differ in height
 # optional on a step: "detail": str = the technical evidence (numbers, DOM text, file names) in small
 # muted type under the shot, so "caption" stays plain words. Optional on a flow: "summary": str =
 # one plain sentence under the title saying what the section is about and how it ended.
@@ -261,7 +261,7 @@ def check_pair(label, st):
     zoom, crop or scroll, and the pair will not line up."""
     (bw, bh), (aw, ah) = Image.open(st["before"]).size, Image.open(st["after"]).size
     dw, dh = abs(aw - bw) / bw, abs(ah - bh) / bh
-    if st.get("full_page"):
+    if st.get("full_page") or is_long(st["before"]) or is_long(st["after"]):
         dh = 0  # a full-page pair differs in height when the fix changed the page length
     if dw > SIZE_TOLERANCE or dh > SIZE_TOLERANCE:
         warn(f"{label}: before is {bw}x{bh}, after is {aw}x{ah} "

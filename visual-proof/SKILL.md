@@ -68,7 +68,7 @@ Two phases with different needs; this is what makes a run fast.
 
 ## Lean rules
 
-Capturing is nearly free; **reading images and re-sending long context are the cost** (a 1280px shot is ~1.5k tokens).
+Capturing is nearly free; **reading images and re-sending long context are the cost** (a 1280px shot is ~1.5k tokens, a full-page one more: read it only where the layout may be wrong).
 
 1. **Prove state without looking.** After each step assert on DOM text, an API call or a DB
    query, and put the evidence in the caption. The screenshot is evidence for the human.
@@ -100,13 +100,11 @@ capture (the toggle shows the *other* language) and note any deviation in the ca
 3. The builder rejects landscape images under 1100px (portrait phone shots: 720px): retake. `"allow_low_res": true` is only for a crop that is small on purpose; the report badges those steps "low resolution" and you name them in `limits`. JPEG quality 85, up to 1600px wide, never lowered to save size.
 4. **Phone:** portrait shots up to 900px wide (height > 1.3x width) are drawn phone-sized, so two or three sit side by side. Capture at 390x844, device scale 2 (or `adb exec-out screencap`), and say so in `limits`. Never upscale or pad to 1280.
 
-**Cropping.**
-- The Before shows the defect clearly: frame the element plus enough surroundings to see where it is.
-- The After uses the **same crop, viewport, scroll, zoom, language and theme** as the Before.
-- **Full page when the whole page is the point:** the user asks for the page, a layout or ordering problem, a long form or list, anything where what sits above or below matters. Use `page.screenshot({ fullPage: true, path, style })`, still at the 1280-wide viewport. Scroll the page once first so lazy content loads, and keep it under ~8000px tall (split a longer page into two shots at a section break). For a local defect prefer an element shot or a clip rect.
-- A full-page shot over 1.8x its width is shown at full card width in a 620px box that scrolls; the shot itself opens whole in the viewer. For a Before/After of full pages add `"full_page": true` to the step: the page may differ in height because the fix changed its length, so the builder skips the height warning (the width must still match).
-- Never crop out the label that explains the screen (heading, tab, field name).
-- The builder warns when a pair's width or height differs by more than 3%, and the slider letterboxes both at one scale instead of cropping. A warning means retake the After.
+**Full page is the default.** Shoot every screen and state as a full page: `page.screenshot({ fullPage: true, path, style })` at the 1280-wide viewport. The reader sees what sits above and below the change (ordering, spacing, what else is on the page), and the report shows a long shot at full card width in a 620px box that scrolls; clicking opens it whole in the viewer.
+- Scroll the page once first so lazy content loads. Keep a shot under ~10000px tall; split a longer page at a section break.
+- **Crop only when full page cannot show it:** a modal, dropdown, toast or other overlay (shoot the viewport with it open), or a 10000px+ page where one small element is the whole point (a clip rect, with surroundings so the reader sees where it is). Never crop out the label that explains the screen (heading, tab, field name).
+- **Pairs:** the After is the same kind of shot as the Before: same full-page or crop, viewport, scroll, language and theme. A pair of full pages may differ in height because the fix changed the page length; mark it `"full_page": true` on the step (taller than 1.8x the width is detected automatically) and the builder skips the height warning (the width must still match).
+- The builder warns when a pair's width differs by more than 3% (or its height, for non-full-page pairs), and the slider letterboxes both at one scale instead of cropping. A warning means retake the After.
 
 ## Kinds of report
 
