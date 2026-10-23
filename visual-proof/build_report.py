@@ -150,6 +150,10 @@ st.addEventListener('pointerup',()=>{if(d&&!d.m)zoom();d=null});
 document.addEventListener('keydown',e=>{if(!lb.classList.contains('open'))return;if(e.key==='Escape')lb.classList.remove('open');if(e.key==='ArrowLeft')show(i-1);if(e.key==='ArrowRight')show(i+1)})})();"""
 
 
+# One page scrolls fine to this many sections (the jump bar keeps it navigable). Splitting
+# earlier only makes the reader open more pages. Parts should stay few and substantial.
+SPLIT_OVER, MAX_PARTS, MIN_PART = 25, 4, 6
+
 MIN_WIDTH = 1100  # a 1280-wide capture is the norm; anything below this will look soft
 TALL_MIN_WIDTH = 720  # a phone shot is shown 380px wide, so 2x that is sharp
 
@@ -314,7 +318,7 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
     img_dir = os.path.join(os.path.dirname(os.path.abspath(out_path)), "embed-img", stem)
     if embed:
         os.makedirs(img_dir, exist_ok=True)
-        if len(spec["flows"]) > 15:
+        if len(spec["flows"]) > SPLIT_OVER:
             print(f"warning: {len(spec['flows'])} sections in one embed page; split by area: give flows a 'group' and "
                   "use --split (see SKILL.md 'One report, shown in the chat')", file=sys.stderr)
     head = CSS + CMP_CSS + (EMBED_CSS if embed else FALLBACK_VARS + VIEWER_CSS)
@@ -404,6 +408,13 @@ if __name__ == "__main__":
     spec, embed = json.load(open(spec_path)), "--embed" in flags
     if "--split" in flags:
         parts = split_spec(spec)
+        total = len(spec["flows"])
+        if total <= SPLIT_OVER or len(parts) < 2:
+            print(f"warning: --split is not needed for {total} sections in {len(parts)} group(s); one page reads better "
+                  f"(split only over {SPLIT_OVER} sections, into at most {MAX_PARTS} parts)", file=sys.stderr)
+        elif len(parts) > MAX_PARTS or any(len(sub["flows"]) < MIN_PART for _, sub in parts):
+            print(f"warning: {len(parts)} parts of {[len(sub['flows']) for _, sub in parts]} sections; merge groups so there are "
+                  f"at most {MAX_PARTS} parts of {MIN_PART}+ sections each", file=sys.stderr)
         base, ext = os.path.splitext(out_path)
         names = [f"{base}-{slug(g)}{ext}" for g, _ in parts]
         for (g, sub), path in zip(parts, names):

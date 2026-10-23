@@ -140,7 +140,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 
 - **One combined report per subject**, not one file per agent. Merge the per-agent specs into one `spec.json`.
 - **Show it inline.** In T3 Code the embed goes into the chat via `html_render`; a link alone is not enough.
-- **Split by area, never by size.** Over ~15 sections, give each flow a `"group"` ("Buyer", "Coupons admin", "Users and referrals") and build with `--split`: one part per group plus a short index (counts by status, section titles). Show each part inline, index first.
+- **One page unless it is really long.** Up to ~25 sections stay on one page: the jump bar makes them reachable and extra pages only make the reader click. Over ~25, give each flow a `"group"` by *area of the product* ("Buyer", "Admin"), not by role handoff or page, and build with `--split`: at most 4 parts of 6+ sections each, plus a short index. Merge small groups. The builder warns when a split is unneeded or too fine.
 - **Jump bar:** every page, standalone and embed, opens with a sticky bar: counts by status (e.g. "3 fixed"), then one numbered, status-coloured link per section, so the reader jumps to any section from anywhere in the report. Keep section titles short; they show on hover. Embeds also sit in a scroll box: 680px inline (so a long part stays short in the chat), and the full window height when opened in the panel or full screen (a script in the page sets it, because `html_render` rejects `vh`). Keep `height` at 760 or below, or the inline frame grows to fit.
 
 ## Build the report
