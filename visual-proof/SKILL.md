@@ -155,7 +155,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
    - Image paths must be **literal absolute paths in the markup**; a path built in JS shows broken.
    - Colours come from T3 theme variables (`--accent`, `--card`, `--border`, `--ring`, ...), never hardcoded.
    - `html_render` rejects `vh`/`dvh` units and `height:100%` on html or body, which is why the scroll box is in px. Keep it that way.
-   - Limits: 10 MiB per image, 25 MiB per page once inlined. Clicking a shot turns on a magnifier lens (+ / - power, Esc off).
+   - Limits: 10 MiB per image, 25 MiB per page once inlined. Clicking a shot in the chat is left to T3, which opens the image in its own viewer (the report adds no zoom of its own).
    - Check: the stored page `~/.t3/userdata/attachments/<id>.html` has one `data:image/` per step and no local absolute paths left (grep for your home folder). `html_preview` proves nothing, it reads local paths.
 
 ## Honesty section is mandatory

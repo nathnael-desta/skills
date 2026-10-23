@@ -36,7 +36,7 @@ Nothing here enters the model's context: do not Read the output.
 --embed: small JPEGs next to the output (embed-img/<name>/NN.jpg) and a page that references
 them by LITERAL absolute path in src="...". T3's html_render inlines only literal
 absolute image paths (a regex over the HTML); a path assembled in JS stays broken.
-In the chat frame a click turns on a magnifier lens (+ / - power, Esc off);
+In the chat frame a click on a shot is left to T3, which opens the image in its viewer;
 before/after pairs slide.
 
 Colours: both modes use T3's theme variable names. The embed gets T3's live values;
@@ -97,26 +97,12 @@ ul{font-size:14px;line-height:1.6;color:var(--muted-foreground);padding-left:20p
 STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--warning",
           "not fixed": "--destructive", "unverified": "--warning", "answered": "--info", "by design": "--info", "not reproduced": "--muted-foreground"}
 
-# Embed: click a shot to turn on a magnifier lens that follows the pointer; click again,
-# Esc or leaving the shot turns it off, and + / - change the power. History: in-place
-# zoom cropped the shot (the frame is narrower than it) and fought the wheel; an
-# always-on hover lens got in the way. On-demand lens is what stuck. For a wider view
-# the user hovers the embed and uses T3's own "Open in panel" button.
+# Embed: a scroll box with the jump bar. Clicking a shot is left to T3, which opens the image
+# in its own viewer. (A click-to-magnify lens used to live here; it fought that viewer, so it was removed.)
 EMBED_CSS = """.scroller{box-sizing:border-box;max-height:680px;overflow-y:auto;position:relative;padding:0 12px 12px;border:1px solid var(--border);border-radius:var(--radius);scrollbar-width:thin}
 .scroller .jump{margin:0 -12px 14px;border-radius:var(--radius) var(--radius) 0 0;border-width:0 0 1px}
-.shot{position:relative;cursor:zoom-in}.shot.on{cursor:none}
-.lens{position:absolute;border-radius:var(--radius);border:2px solid var(--ring);box-shadow:0 8px 28px color-mix(in srgb,var(--foreground) 30%,transparent);background-repeat:no-repeat;background-color:var(--card);pointer-events:none;display:none;z-index:3}
-.shot.on .lens{display:block}
-.lens b{position:absolute;right:6px;bottom:6px;font:700 11px var(--font-sans);padding:1px 6px;border-radius:999px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border)}"""
-EMBED_JS = """(()=>{const sc=document.querySelector('.scroller'),jb=sc.querySelector('.jump');const fit=()=>{sc.style.maxHeight=(innerHeight>800?innerHeight-2:680)+'px'};fit();addEventListener('resize',fit);jb.addEventListener('click',e=>{const a=e.target.closest('a[href^="#flow"]');if(!a)return;e.preventDefault();const t=sc.querySelector(a.getAttribute('href'));sc.scrollTo({top:t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-jb.offsetHeight-8,behavior:'smooth'})});})();
-(()=>{let K=2.5,on=null;const off=()=>{if(on)on.classList.remove('on');on=null};
-const move=(s,e)=>{const im=s.querySelector('img'),l=s.querySelector('.lens'),r=im.getBoundingClientRect(),W=Math.min(420,r.width*.55),H=W*.62,x=e.clientX-r.left,y=e.clientY-r.top;
-Object.assign(l.style,{width:W+'px',height:H+'px',left:Math.min(Math.max(x-W/2,0),r.width-W)+'px',top:Math.min(Math.max(y-H/2,0),r.height-H)+'px',backgroundImage:'url("'+im.currentSrc+'")',backgroundSize:r.width*K+'px auto',backgroundPosition:(W/2-x*K)+'px '+(H/2-y*K)+'px'});l.firstChild.textContent=K+'\u00d7'};
-document.querySelectorAll('.shot:not(.cmp)').forEach(s=>{const l=document.createElement('div');l.className='lens';l.append(document.createElement('b'));s.append(l);let last;
-s.addEventListener('click',e=>{const was=on===s;off();if(!was){on=s;s.classList.add('on');move(s,e)}last=e});
-s.addEventListener('pointermove',e=>{last=e;if(on===s)move(s,e)});s.addEventListener('pointerleave',()=>{if(on===s)off()});
-s._k=()=>last&&move(s,last)});
-document.addEventListener('keydown',e=>{if(!on)return;if(e.key==='Escape')off();else if(e.key==='+'||e.key==='='){K=Math.min(5,K+.5);on._k()}else if(e.key==='-'){K=Math.max(1.5,K-.5);on._k()}})})();"""
+.shot:not(.cmp){cursor:pointer}"""
+EMBED_JS = """(()=>{const sc=document.querySelector('.scroller'),jb=sc.querySelector('.jump');const fit=()=>{sc.style.maxHeight=(innerHeight>800?innerHeight-2:680)+'px'};fit();addEventListener('resize',fit);jb.addEventListener('click',e=>{const a=e.target.closest('a[href^="#flow"]');if(!a)return;e.preventDefault();const t=sc.querySelector(a.getAttribute('href'));sc.scrollTo({top:t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-jb.offsetHeight-8,behavior:'smooth'})});})();"""
 
 # Before/after: both shots stacked, the "after" clipped by a slider. Same route, same
 # viewport, same state, or the two will not line up. The box takes the taller of the two
@@ -360,7 +346,7 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
         cmp = any("before" in s for s in steps)
         shots_in = any("html" not in s for s in steps)
         tip = "" if not shots_in else (" &middot; drag across a shot to compare before and after" if cmp
-               else " &middot; click a screenshot to magnify, + / &minus; to change" if embed else " &middot; click a screenshot to enlarge")
+               else " &middot; click a screenshot to enlarge")
         st = flow.get("status")
         if st and st not in STATUS:
             sys.exit(f"unknown status {st!r} in {flow['title']!r}; use one of {sorted(STATUS)}")
