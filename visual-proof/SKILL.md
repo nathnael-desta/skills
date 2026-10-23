@@ -133,13 +133,29 @@ Inline comments, annotations, "also do X" asides and **questions** each count as
 
 ## Explanations (how-it-works questions)
 
-When an ask is "how does X work?", "why does it do Y?" or "explain Z", answer it in the report as its own section, `status: "answered"`, so it sits in the same place as the fixes. Use `html` steps instead of screenshots:
+An ask like "how does X work?", "why is Y a separate page?" or "what do these tools do?" gets its own section, `status: "answered"`, built from `html` steps. The reader is smart, busy and not technical: if they have to ask a follow-up, the section failed.
 
-- A step is `{"html":"<div class=x-row>...</div>","caption":"..."}`. Build it from the kit: `.x-row` of `.x-box` joined by `<span class=x-arrow>&rarr;</span>`, `.x-box.hot` for the key one, `.x-note` for the small print, `.x-code` for code, inline `<svg viewBox>` for diagrams (use `currentColor`; it follows light and dark). Colours only from theme variables; no `<script>`, `on*=` handlers or `javascript:` links (the builder refuses them).
-- **Ground it in the real thing.** Read the code, the schema or the run first, and use the real names, files and numbers. An explanation from memory is a guess, so say so in `limits`.
-- **Detailed, not simplified.** The reader is smart and busy, not a beginner. Show the actual stages, the actual data and what breaks or branches; one concept per card, 3 to 5 cards, the cards left to right in the order the thing happens. No analogies standing in for the mechanism.
-- Skip a card when two sentences in the chat explain it (a card costs 500-1,500 tokens, paid twice).
-- A turn with only explanations and no UI change needs no report: use `html_render` directly (see `t3-visualize`), same kit.
+**Read first.** Open the code, schema or run and use the real names, routes and numbers. An explanation from memory is a guess; say so in `limits`.
+
+**Lead with the answer.** The section `summary` and the ask's `did` are the direct answer in one or two plain sentences ("Because people with no pass are redirected there and Chapa sends them back there, so it has to work before Settings is reachable"). Never the question restated.
+
+**Cards** (3 to 5, left to right in reading order). Each card's `caption` is its takeaway as a sentence, not a label ("Unpaid users cannot reach Settings, so payment needs a page outside it", not "Where the page is used"). Cover what applies:
+1. **The short answer + who or what is involved**, with each jargon term defined once ("Chapa is the payment provider").
+2. **What happens, in order**, with the real trigger and the result of each step.
+3. **Every branch the code has**: the other role, the failure, the empty state, what happens if the user does X instead.
+4. **What depends on it**: what breaks if it changes.
+5. **Options**, when a decision is open: A/B side by side, each with its consequence, then your recommendation.
+
+Completeness test: for each branch in the code, could the reader find it on a card? If not, add the card.
+
+**The kit** (colours come from theme variables only; no `<script>`, `on*=` handlers or `javascript:` links; the builder refuses them):
+- `<div class=x-ans>` the one-sentence answer, big, at the top of the first card.
+- `<ol class=x-steps><li><b>What happens</b><span>Plain words, with <span class=x-code>/real/route</span>.</span></li>...</ol>`: a numbered vertical list joined by a line. Use it for **every sequence**; the builder numbers the items. Never a wrapping row of boxes with arrows.
+- `<div class=x-cols><div class="x-col hot"><h4>Heading</h4><ol class=x-steps>...</ol></div><div class=x-col>...</div></div>`: branches or options side by side, stacking on a narrow screen. `hot` marks the current or recommended one.
+- `<p class=x-note>` small print; inline `<svg viewBox>` only for a real diagram (data flow, architecture), in `currentColor`.
+- `x-row`/`x-box`/`x-arrow` remain for a diagram of at most three boxes in a line.
+
+Skip the card when two sentences in the chat explain it (a card costs 500 to 1,500 tokens, paid twice). A turn with only explanations and no UI change needs no report: use `html_render` directly (see `t3-visualize`), same kit.
 
 ## Write for the reader
 

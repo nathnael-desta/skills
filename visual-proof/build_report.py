@@ -17,7 +17,7 @@ spec = {"title": str, "note": str,
         # so a dropped ask is visible. flow None: also answer it in full in the chat.
         "limits": [str]}          # limits = honest "not verified / known gaps"
 step = {"img": "/abs.png", "caption": str}                        # one screenshot (a full-page one scrolls in a 620px box)
-     | {"html": "<div class=x-row>...</div>", "caption": str}      # an explanation (see XP_CSS)
+     | {"html": "<div class=x-row>...</div>", "caption": str}      # an explanation (kit: x-ans, x-steps, x-cols; see XP_CSS)
      | {"before": "/abs.png", "after": "/abs.png", "caption": str}  # drag-to-compare
      # add "full_page": true to a pair whose Before and After are full-page captures: a different height is then fine
 # optional on a step: "detail": str = the technical evidence (numbers, DOM text, file names) in small
@@ -68,13 +68,25 @@ h1{font-size:26px;margin:0 0 8px}.note{color:var(--muted-foreground);margin:0 0 
 # Kit for explanation steps ({"html": ...}): boxes in a row joined by arrows, notes, code.
 # Agents compose these (or inline SVG with viewBox) instead of styling from scratch.
 XP_CSS = """.card.xp{flex-basis:min(96%,1000px)}
-.xp .x{font-size:14px;line-height:1.55}
+.xp .x{font-size:15px;line-height:1.55}
+.card.xp figcaption{min-height:0;font-weight:600}
+.x-ans{border-left:4px solid var(--accent);padding:2px 0 2px 12px;margin:2px 0 14px;font-size:16px;font-weight:600;line-height:1.5}
+.x-steps{list-style:none;margin:6px 0 4px;padding:0}
+.x-steps>li{position:relative;padding:0 0 14px 42px;min-height:28px}
+.x-steps>li:before{content:attr(data-n);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;border:2px solid var(--accent);background:var(--card);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.x-steps>li:after{content:"";position:absolute;left:14px;top:32px;bottom:4px;width:2px;background:var(--border)}
+.x-steps>li:last-child{padding-bottom:2px}.x-steps>li:last-child:after{display:none}
+.x-steps b{display:block}.x-steps li>span{display:block;color:var(--muted-foreground);font-size:14px}
+.x-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin:8px 0}
+.x-col{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);background:color-mix(in srgb,var(--foreground) 4%,var(--card))}
+.x-col.hot{border-color:var(--accent)}.x-col h4{margin:0 0 8px;font-size:15px}
+.x-col .x-steps>li:after{background:color-mix(in srgb,var(--foreground) 18%,transparent)}
 .x-row{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;margin:10px 0}
 .x-box{flex:1 1 150px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:color-mix(in srgb,var(--foreground) 4%,var(--card));font-size:14px;line-height:1.5}
 .x-box b{display:block;margin-bottom:2px}.x-box.hot{border-color:var(--accent)}
 .x-arrow{align-self:center;color:var(--muted-foreground);font-size:18px}
-.x-note{font-size:13px;line-height:1.5;color:var(--muted-foreground);margin:6px 0}
-.x-code{font-family:var(--font-mono,monospace);font-size:12.5px}
+.x-note{font-size:13px;line-height:1.5;color:var(--muted-foreground);margin:8px 0 0}
+.x-code{font-family:var(--font-mono,monospace);font-size:12.5px;padding:1px 6px;border-radius:4px;background:color-mix(in srgb,var(--foreground) 8%,transparent);word-break:break-word}
 .xp svg{max-width:100%;height:auto}.xp svg text{fill:currentColor;font-family:var(--font-sans)}
 """
 
@@ -170,6 +182,14 @@ def is_long(path):
     a box that scrolls, so a 6000px page is readable without a 4000px card."""
     w, h = Image.open(path).size
     return h > w * LONG_RATIO and w > PHONE_MAX_WIDTH
+
+
+def number_steps(markup):
+    """Number each <li> of an <ol class=x-steps> (data-n), so authors just write the list."""
+    def one(m):
+        items = iter(range(1, 1000))
+        return re.sub(r"<li>", lambda _: f'<li data-n="{next(items)}">', m.group(0))
+    return re.sub(r"<ol class=x-steps>.*?</ol>", one, markup, flags=re.S)
 
 
 def is_low(path):
@@ -375,6 +395,13 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
     asks = spec.get("asks") or []
     nflows = len(spec["flows"])
     check_asks(asks, nflows)
+    norm = lambda t: re.sub(r"\W+", " ", t.lower()).strip()
+    for a in asks:
+        if norm(a["did"]) == norm(a["quote"]) or (a["status"] == "answered" and len(a["did"]) < 40):
+            warn(f"ask {a['quote'][:40]!r}: 'did' must be the actual answer or what you did, in plain words, not the question restated")
+    for fi, flow in enumerate(spec["flows"], 1):
+        if flow.get("status") == "answered" and sum("html" in st for st in flow["steps"]) < 2:
+            warn(f"section {fi} is an explanation with under 2 cards; an answer usually needs the steps, the branches and the options (SKILL.md 'Explanations')")
     if asks:
         for i in range(1, nflows + 1):
             if not any(a.get("flow") == i for a in asks):
@@ -415,7 +442,8 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
             if "html" in s:
                 if UNSAFE_HTML.search(s["html"]):
                     sys.exit(f"section {fi} step {i}: explanation html may not contain <script>, on*= handlers or javascript: links")
-                out.append(f'<figure class="card xp" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption><div class=x>{s["html"]}</div></figure>')
+                xhtml = number_steps(s["html"])
+                out.append(f'<figure class="card xp" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption><div class=x>{xhtml}</div></figure>')
                 continue
             if "before" in s:
                 check_pair(f"section {fi} step {i}", s)
