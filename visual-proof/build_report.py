@@ -16,9 +16,10 @@ spec = {"title": str, "note": str,
         # non-visual ask. The report ends with an "Everything you asked" checklist of all of them,
         # so a dropped ask is visible. flow None: also answer it in full in the chat.
         "limits": [str]}          # limits = honest "not verified / known gaps"
-step = {"img": "/abs.png", "caption": str}                        # one screenshot
+step = {"img": "/abs.png", "caption": str}                        # one screenshot (a full-page one scrolls in a 620px box)
      | {"html": "<div class=x-row>...</div>", "caption": str}      # an explanation (see XP_CSS)
      | {"before": "/abs.png", "after": "/abs.png", "caption": str}  # drag-to-compare
+     # add "full_page": true to a pair whose Before and After are full-page captures: a different height is then fine
 # optional on a step: "detail": str = the technical evidence (numbers, DOM text, file names) in small
 # muted type under the shot, so "caption" stays plain words. Optional on a flow: "summary": str =
 # one plain sentence under the title saying what the section is about and how it ended.
@@ -77,6 +78,7 @@ CSS = XP_CSS + """body{margin:0;font-family:var(--font-sans);color:var(--foregro
 .row{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:10px;scrollbar-width:thin}
 .card{flex:0 0 min(92%,1000px);scroll-snap-align:start;margin:0;padding:12px;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);box-sizing:border-box}
 .card.tall{flex-basis:min(80%,380px)}
+.lw{max-height:620px;overflow-y:auto;border-radius:var(--radius);scrollbar-width:thin}
 .card figcaption{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.55;margin:0 0 12px;min-height:3.1em}
 .n{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent,var(--primary));color:var(--accent-foreground,var(--primary-foreground));font-weight:700;font-size:13px;display:grid;place-items:center;margin-top:1px}
 .shot{border-radius:var(--radius);overflow:hidden;cursor:zoom-in;user-select:none}
@@ -141,6 +143,8 @@ document.addEventListener('keydown',e=>{if(!lb.classList.contains('open'))return
 SPLIT_OVER, MAX_PARTS, MIN_PART = 25, 4, 6
 
 MIN_WIDTH = 1100  # a 1280-wide capture is the norm; anything below this will look soft
+PHONE_MAX_WIDTH = 900  # wider portrait shots are full-page desktop captures, not phones
+LONG_RATIO, LONG_BOX = 1.8, 620  # taller than 1.8x its width: scroll inside a 620px box
 TALL_MIN_WIDTH = 720  # a phone shot is shown 380px wide, so 2x that is sharp
 
 
@@ -148,7 +152,14 @@ def is_tall(path):
     """A portrait screenshot (a phone screen). It is shown at phone width, not the
     full card width, or a 1080x2340 shot fills several screens of scrolling."""
     w, h = Image.open(path).size
-    return h > w * 1.3
+    return h > w * 1.3 and w <= PHONE_MAX_WIDTH
+
+
+def is_long(path):
+    """A full-page desktop capture (much taller than wide). Shown at full card width inside
+    a box that scrolls, so a 6000px page is readable without a 4000px card."""
+    w, h = Image.open(path).size
+    return h > w * LONG_RATIO and w > PHONE_MAX_WIDTH
 
 
 def check_resolution(spec):
@@ -185,6 +196,8 @@ def check_pair(label, st):
     zoom, crop or scroll, and the pair will not line up."""
     (bw, bh), (aw, ah) = Image.open(st["before"]).size, Image.open(st["after"]).size
     dw, dh = abs(aw - bw) / bw, abs(ah - bh) / bh
+    if st.get("full_page"):
+        dh = 0  # a full-page pair differs in height when the fix changed the page length
     if dw > SIZE_TOLERANCE or dh > SIZE_TOLERANCE:
         print(f"warning: {label}: before is {bw}x{bh}, after is {aw}x{ah} "
               f"(width {dw:.0%}, height {dh:.0%} apart): retake with the same viewport, crop and scroll",
@@ -370,6 +383,8 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
                 shot = f'<div class=shot><img src="{src(s["img"], f"{n:02d}")}" alt=""></div>'
             detail = f'<p class=detail>{E(s["detail"])}</p>' if s.get("detail") else ""
             tall = is_tall(s.get("before") or s["img"])
+            if any(is_long(s[k]) for k in ("before", "after", "img") if k in s):
+                shot = f'<div class=lw>{shot}</div>'
             out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption>{shot}{detail}</figure>')
         out.append("</div></section>")
     if checklist and asks:

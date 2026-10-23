@@ -84,12 +84,13 @@ capture (the toggle shows the *other* language) and note any deviation in the ca
 1. Check the first PNG of every tab: `identify <png> | awk '{print $3}'` must be **>= 1280 wide** (a tab can silently capture at half size). Use a 1280-wide viewport; other widths are resampled.
 2. `identify` the raw folder right after saving; retake while the page state exists. Never `includeImage:true` to see better; the saved PNG is what the user gets.
 3. The builder rejects landscape images under 1100px (portrait phone shots: 720px). `"allow_low_res": true` overrides it and must be named in `limits`. JPEG quality 85, up to 1600px wide.
-4. **Phone:** portrait shots (height > 1.3x width) are drawn phone-sized, so two or three sit side by side. Capture at 390x844, device scale 2 (or `adb exec-out screencap`), and say so in `limits`. Never upscale or pad to 1280.
+4. **Phone:** portrait shots up to 900px wide (height > 1.3x width) are drawn phone-sized, so two or three sit side by side. Capture at 390x844, device scale 2 (or `adb exec-out screencap`), and say so in `limits`. Never upscale or pad to 1280.
 
 **Cropping.**
 - The Before shows the defect clearly: frame the element plus enough surroundings to see where it is.
 - The After uses the **same crop, viewport, scroll, zoom, language and theme** as the Before.
-- For a local defect prefer an element screenshot or a fixed clip rect over a full page. On a long page scroll the defect into view first.
+- **Full page when the whole page is the point:** the user asks for the page, a layout or ordering problem, a long form or list, anything where what sits above or below matters. Use `page.screenshot({ fullPage: true, path, style })`, still at the 1280-wide viewport. Scroll the page once first so lazy content loads, and keep it under ~8000px tall (split a longer page into two shots at a section break). For a local defect prefer an element shot or a clip rect.
+- A full-page shot over 1.8x its width is shown at full card width in a 620px box that scrolls; the shot itself opens whole in the viewer. For a Before/After of full pages add `"full_page": true` to the step: the page may differ in height because the fix changed its length, so the builder skips the height warning (the width must still match).
 - Never crop out the label that explains the screen (heading, tab, field name).
 - The builder warns when a pair's width or height differs by more than 3%, and the slider letterboxes both at one scale instead of cropping. A warning means retake the After.
 
