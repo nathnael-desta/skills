@@ -104,7 +104,7 @@ capture (the toggle shows the *other* language) and note any deviation in the ca
 
 Reports can mix kinds. Every section gets an honest `status`: `fixed`, `partial` (say what is left),
 `not reproduced` (show the Before that looks fine), `needs decision`, `unverified`
-(fix made, not re-run), `current design` (it works the way it is built and documented today, not a defect: show it and say which rule or decision it follows, never `not fixed`; the name is deliberately neutral, so it never reads as "you fool, this was by design"), `not fixed` (a real defect left open; say why).
+(fix made, not re-run), `current design` (it works the way it is built and documented today, not a defect: show it and say which rule or decision it follows, never `not fixed`; neutral on purpose: "by design" reads as blaming the user for asking), `not fixed` (a real defect left open; say why).
 **`needs decision` must name the decision**: the section's `summary` states the exact question, the options (A/B/C, each with its consequence) and your recommendation, in plain words. "Left as is; your call" is not a decision. Show a shot per option when they look different. Non-visual issues still get a section: shoot where the user would notice, or put the evidence in the caption.
 A pair's caption says what changed ("Approve stays disabled until an ID is uploaded"), not "after".
 
