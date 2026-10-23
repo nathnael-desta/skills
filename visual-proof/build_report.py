@@ -26,7 +26,8 @@ step = {"img": "/abs.png", "caption": str}                        # one screensh
 
 Every page opens with a sticky jump bar (counts by status, a numbered link per section). The
 embed keeps its height bounded: the sections scroll inside a fixed-height box (html_render
-rejects vh units and fits the frame to the page, so the cap is in px). Before/after pairs
+rejects vh units and fits the frame to the page, so the cap is in px; in full screen the frame is
+taller than the page and a script grows the box to fill the gap). Before/after pairs
 are letterboxed, never cropped; the builder warns when the two sizes differ by over 3%.
 
 Standalone: one self-contained file (images as base64 JPEG). Clicking a shot opens a
@@ -104,7 +105,7 @@ STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--war
 EMBED_CSS = """.scroller{box-sizing:border-box;max-height:680px;overflow-y:auto;position:relative;padding:0 12px 12px;border:1px solid var(--border);border-radius:var(--radius);scrollbar-width:thin}
 .scroller .jump{margin:0 -12px 14px;border-radius:var(--radius) var(--radius) 0 0;border-width:0 0 1px}
 .shot:not(.cmp){cursor:pointer}"""
-EMBED_JS = """(()=>{const sc=document.querySelector('.scroller'),jb=sc.querySelector('.jump');const fit=()=>{sc.style.maxHeight=(innerHeight>800?innerHeight-2:680)+'px'};fit();addEventListener('resize',fit);jb.addEventListener('click',e=>{const a=e.target.closest('a[href^="#flow"]');if(!a)return;e.preventDefault();const t=sc.querySelector(a.getAttribute('href'));sc.scrollTo({top:t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-jb.offsetHeight-8,behavior:'smooth'})});})();"""
+EMBED_JS = """(()=>{const sc=document.querySelector('.scroller'),jb=sc.querySelector('.jump');const fit=()=>{const m=parseFloat(sc.style.maxHeight)||680,d=innerHeight-Math.ceil(document.body.getBoundingClientRect().bottom);if((d>60&&sc.scrollHeight>sc.clientHeight+4)||(d<-8&&m>680))sc.style.maxHeight=Math.max(680,m+d-2)+'px'};fit();addEventListener('resize',fit);addEventListener('load',fit);addEventListener('message',()=>setTimeout(fit,60));setInterval(fit,500);jb.addEventListener('click',e=>{const a=e.target.closest('a[href^="#flow"]');if(!a)return;e.preventDefault();const t=sc.querySelector(a.getAttribute('href'));sc.scrollTo({top:t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-jb.offsetHeight-8,behavior:'smooth'})});})();"""
 
 # Before/after: both shots stacked, the "after" clipped by a slider. Same route, same
 # viewport, same state, or the two will not line up. The box takes the taller of the two
