@@ -95,7 +95,7 @@ ul{font-size:14px;line-height:1.6;color:var(--muted-foreground);padding-left:20p
 
 # Issue status -> theme colour. Colour sits on the border and dot, never a fill.
 STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--warning",
-          "not fixed": "--destructive", "unverified": "--warning", "answered": "--info", "not reproduced": "--muted-foreground"}
+          "not fixed": "--destructive", "unverified": "--warning", "answered": "--info", "by design": "--info", "not reproduced": "--muted-foreground"}
 
 # Embed: click a shot to turn on a magnifier lens that follows the pointer; click again,
 # Esc or leaving the shot turns it off, and + / - change the power. History: in-place

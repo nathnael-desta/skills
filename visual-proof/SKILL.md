@@ -103,8 +103,9 @@ capture (the toggle shows the *other* language) and note any deviation in the ca
 | **Visual change** | one pair per screen or state (light, dark, mobile, empty, error) | a restyle or redesign |
 
 Reports can mix kinds. Every section gets an honest `status`: `fixed`, `partial` (say what is left),
-`not reproduced` (show the Before that looks fine), `needs decision` (show the options), `unverified`
-(fix made, not re-run), `not fixed` (say why). Non-visual issues still get a section: shoot where the user would notice, or put the evidence in the caption.
+`not reproduced` (show the Before that looks fine), `needs decision`, `unverified`
+(fix made, not re-run), `by design` (it behaves as documented or intended: show it and say which rule, never `not fixed`), `not fixed` (a real defect left open; say why).
+**`needs decision` must name the decision**: the section's `summary` states the exact question, the options (A/B/C, each with its consequence) and your recommendation, in plain words. "Left as is; your call" is not a decision. Show a shot per option when they look different. Non-visual issues still get a section: shoot where the user would notice, or put the evidence in the caption.
 A pair's caption says what changed ("Approve stays disabled until an ID is uploaded"), not "after".
 
 **Coverage check (batches).** The user may never reread their prompt, so a dropped ask is invisible.
@@ -140,7 +141,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 
 - **One combined report per subject**, not one file per agent. Merge the per-agent specs into one `spec.json`.
 - **Show it inline.** In T3 Code the embed goes into the chat via `html_render`; a link alone is not enough.
-- **One page unless it is really long.** Up to ~25 sections stay on one page: the jump bar makes them reachable and extra pages only make the reader click. Over ~25, give each flow a `"group"` by *area of the product* ("Buyer", "Admin"), not by role handoff or page, and build with `--split`: at most 4 parts of 6+ sections each, plus a short index. Merge small groups. The builder warns when a split is unneeded or too fine.
+- **One page unless it is really long.** Up to ~25 sections stay on one page: the jump bar makes them reachable and extra pages only make the reader click. Over ~25, give each flow a `"group"` by *area of the product* ("Buyer", "Admin"), not by role handoff or page, and build with `--split`: at most 4 parts of 6+ sections each, plus a short index. **Show the part pages, never the index on its own**: its list repeats the parts' jump bars as a wall of status text. Link the index in the file reply only. Merge small groups. The builder warns when a split is unneeded or too fine.
 - **Jump bar:** every page, standalone and embed, opens with a sticky bar: counts by status (e.g. "3 fixed"), then one numbered, status-coloured link per section, so the reader jumps to any section from anywhere in the report. Keep section titles short; they show on hover. Embeds also sit in a scroll box: 680px inline (so a long part stays short in the chat), and the full window height when opened in the panel or full screen (a script in the page sets it, because `html_render` rejects `vh`). Keep `height` at 760 or below, or the inline frame grows to fit.
 
 ## Build the report
