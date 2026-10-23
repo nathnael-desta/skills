@@ -52,7 +52,10 @@ Two phases with different needs; this is what makes a run fast.
 - **Catalog agents** each get their own browser session and, when roles log in at once, their own cookie scope (`127.0.0.1` vs `localhost`) or run in turn. They write only into `<scratch>`.
 - **Fix worktrees:** `git worktree add <scratch>/wt-<area> -b fix/<area>`; its dev server on its own port under `systemd-run --user --unit=<name> -p MemoryMax=6G`; at most 3 servers at a time. Merge the branches back, then stop every server, `git worktree remove` each one, and delete the branches. A leftover worktree or server is a failed run.
 - **Re-walk** on the merged build in the main checkout.
-- **Time box the setup:** if servers, logins or the Before state are not ready after ~10 minutes, shoot what is reachable, list the rest as "not captured" in `limits`, and continue. The walk's time goes to shots and fixes, not to setup. Speed never trades resolution: every shot still meets the sizes under Sharp screenshots.
+- **Everything gets captured.** The report exists so the user never re-checks by hand; "not captured" is not an outcome. Setup that stalls is a problem to solve, not a budget to run out:
+  - If one obstacle (server, login, Before state, flaky shot) costs more than ~10 minutes, **change approach** instead of retrying: split the walk across parallel agents, reuse the logged-in session, seed the state through the API or DB, shoot at the final crop directly (`clip`) so nothing is re-cropped, retry a timed-out shot inside the same script.
+  - Only an owner decision, missing data or an environment you cannot reach leaves a shot missing. Then the item is `needs decision` or `not fixed` with the exact blocker, and the reply opens with it so the user can unblock you.
+  - Speed never trades resolution: every shot meets the sizes under Sharp screenshots.
 
 **Verdict: catalog first, fix in batches, then walk again.** Do not fix as you meet each problem.
 - During a walk only record: a screenshot plus one line per problem in `issues.md` (or the manifest).
