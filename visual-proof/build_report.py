@@ -95,7 +95,7 @@ ul{font-size:14px;line-height:1.6;color:var(--muted-foreground);padding-left:20p
 
 # Issue status -> theme colour. Colour sits on the border and dot, never a fill.
 STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--warning",
-          "not fixed": "--destructive", "unverified": "--warning", "answered": "--info", "by design": "--info", "not reproduced": "--muted-foreground"}
+          "not fixed": "--destructive", "unverified": "--warning", "answered": "--info", "current design": "--info", "not reproduced": "--muted-foreground"}
 
 # Embed: a scroll box with the jump bar. Clicking a shot is left to T3, which opens the image
 # in its own viewer. (A click-to-magnify lens used to live here; it fought that viewer, so it was removed.)
