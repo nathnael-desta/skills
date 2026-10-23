@@ -1,6 +1,6 @@
 ---
 name: visual-proof
-description: "MANDATORY whenever you change anything the user can see in a browser (UI, copy, layout, a page's behaviour) in answer to their feedback, annotations, screenshots or a fix list, and for any request to walk through, test or show a flow working. Drive the real app, fix what you find, re-walk to prove it, and hand back a side-scrolling HTML report of captioned screenshots and drag-to-compare before/after pairs, one section per issue or flow, with a status, ending in a checklist of every ask so none is missed; how-it-works questions in the same message get a visual explanation section. Capture Before shots BEFORE the first edit. For any agent (Claude, Codex, a subagent). Formerly flow-walkthrough."
+description: "MANDATORY, invoke before the first edit, when the user sends feedback, annotated screenshots or a fix list about something visible in a browser (UI, copy, layout, a page's behaviour), and for any request to walk through, tour, test or show how a flow, feature or tool works for its users. Drive the real app, fix what you find, re-walk to prove it, and hand back a side-scrolling HTML report of captioned screenshots and drag-to-compare before/after pairs, one section per issue or flow, with a status, ending in a checklist of every ask; how-it-works questions in the same message get a visual explanation section. For any agent (Claude, Codex, a subagent). Formerly flow-walkthrough."
 ---
 
 # Visual proof report
@@ -16,7 +16,7 @@ agent or a subagent; the project's browser rules win (which tool, banned tools, 
 
 Use it whenever a turn changes something a person sees in a browser: UI, copy, layout, styling or
 a page's behaviour. That includes **feedback as annotated screenshots, questions mixed with
-fixes, "fix these", or a pasted list**. A mixed message is still a batch: the fixes need proof, and every question is an ask that gets answered in the chat and listed in the report (see Coverage check; a how-it-works question gets an explanation section).
+fixes, "fix these", or a pasted list**, and any **"show me how it goes / how it works / what the tools do"** request, which is a flow report with no fixes. Invoke the skill as the first action, before reading code or editing; an agent that starts by editing has lost the Befores. A mixed message is still a batch: the fixes need proof, and every question is an ask that gets answered in the chat and listed in the report (see Coverage check; a how-it-works question gets an explanation section).
 
 1. **Before the first edit**, write the asks (exact words) to `<scratch>/asks.md` and capture a
    Before shot of every visual ask. Once the code changes, a Before cannot be recreated cheaply.
@@ -26,9 +26,7 @@ fixes, "fix these", or a pasted list**. A mixed message is still a batch: the fi
 A text summary, a DOM-text check or "tsc and vitest pass" is evidence for you, not the deliverable.
 Skip the report only for changes nobody can see (backend, docs, tests, scripts) and say "no visual change, no report".
 
-**If you edited first by mistake:** rebuild the Before from git. `git worktree add <scratch>/before <sha>`,
-run its dev server on another port under `systemd-run --user -p MemoryMax=6G`, shoot there, then stop
-it and remove the worktree. Say in `limits` that the Befores were rebuilt.
+**If you edited first by mistake:** rebuild the Before from git: a `git worktree` at the pre-edit sha, its dev server on another port (see Phases), shoot there, then stop the server and remove the worktree. Say in `limits` that the Befores were rebuilt.
 
 ## Verification loop
 
@@ -40,6 +38,21 @@ could have fixed is a failed run.
 - **A product call is still fixed.** Where a documented decision conflicts with the user's own stated rule, fix toward the user's rule and flag it in the section (`fixed`, plus the note), instead of leaving it open.
 - **Loop:** walk, catalog, fix, re-walk. The re-walk *is* the next loop's walk: any new or surviving bug goes back into the catalog and gets fixed, then walked again. There is no fixed number of loops. Stop on one fully clean pass, or when only the open kinds above remain.
 - **Runaway guard:** if the same item still fails after three fix attempts, or three passes in a row find no fewer problems than the one before, stop looping on it and report it open with the reason.
+
+## Phases, parallel agents and worktrees
+
+Two phases with different needs; this is what makes a run fast.
+
+| Phase | Edits code? | Parallel agents | Worktree |
+|---|---|---|---|
+| **Catalog** (walk, shoot, note issues) and **re-walk** | no | yes: 3-4 cheap agents, each an area or role, all on the **one running app** | not needed |
+| **Fix** | yes | yes, if each agent owns different files | one per concurrent fixer; none for a single fixer |
+
+- **Befores come from the catalog walk** of the unedited app, so they never need a second checkout or server.
+- **Catalog agents** each get their own browser session and, when roles log in at once, their own cookie scope (`127.0.0.1` vs `localhost`) or run in turn. They write only into `<scratch>`.
+- **Fix worktrees:** `git worktree add <scratch>/wt-<area> -b fix/<area>`; its dev server on its own port under `systemd-run --user --unit=<name> -p MemoryMax=6G`; at most 3 servers at a time. Merge the branches back, then stop every server, `git worktree remove` each one, and delete the branches. A leftover worktree or server is a failed run.
+- **Re-walk** on the merged build in the main checkout.
+- **Time box the setup:** if servers, logins or the Before state are not ready after ~10 minutes, shoot what is reachable, list the rest as "not captured" in `limits`, and continue. The walk's time goes to shots and fixes, not to setup. Speed never trades resolution: every shot still meets the sizes under Sharp screenshots.
 
 **Verdict: catalog first, fix in batches, then walk again.** Do not fix as you meet each problem.
 - During a walk only record: a screenshot plus one line per problem in `issues.md` (or the manifest).
@@ -60,14 +73,12 @@ Capturing is nearly free; **reading images and re-sending long context are the c
    contact sheet (`montage -label %t -tile 4x -geometry 600x470+3+3 ...`), read once.
 3. **Name shots as you save them**: `<scratch>/raw/NN-step.png`. Never rebuild order from mtimes.
 4. **Wait for lagging UI** (modals, toasts, spinners) on a selector, then shoot. A spinner or empty page is a failed shot.
-5. With Browser Control, pass `style: "[id^=__browser_control]{display:none!important}"` to `page.screenshot` to hide the agent cursor and session pill.
+5. With Browser Control, pass `style: "[id^=__browser_control]{display:none!important}"` to `page.screenshot`; retry a timed-out shot in the same script (up to 4 tries) rather than re-running the walk.
 
 ## Delegating the browser run
 
 - **Use a cheap model for the walk** (a Haiku-class model; the author uses `claude-haiku-5-5` via `delegate_task`, always the exact ID, never an alias). Escalate after it got something wrong once.
-- **Haiku can die of compaction** (starts at ~35k, compacts near 80k, three in a row kill it). Size one job to one window: one agent per role area, grep or offset/limit reads, 2-3 files per step, a short reply (counts only).
-- **Make progress durable**: it appends `{issue,status,before,after,caption}` to `manifest.jsonl` per item, so a crash loses one item at most; `spec.json` is written last.
-- **Concurrent agents on one stack need separate cookies** (`127.0.0.1` vs `localhost`), or run in turn.
+- **Size one job to one window** (Haiku compacts near 80k, three in a row kill it): one agent per area, offset/limit reads, a short reply. It appends `{issue,status,before,after,caption}` to `manifest.jsonl` per item, so a crash loses one item; `spec.json` is written last.
 - **Verify its verdicts**: open the screenshot behind every "not fixed" before acting.
 
 ## Default look: the project's language, light
@@ -83,7 +94,7 @@ capture (the toggle shows the *other* language) and note any deviation in the ca
 
 1. Check the first PNG of every tab: `identify <png> | awk '{print $3}'` must be **>= 1280 wide** (a tab can silently capture at half size). Use a 1280-wide viewport; other widths are resampled.
 2. `identify` the raw folder right after saving; retake while the page state exists. Never `includeImage:true` to see better; the saved PNG is what the user gets.
-3. The builder rejects landscape images under 1100px (portrait phone shots: 720px). `"allow_low_res": true` overrides it and must be named in `limits`. JPEG quality 85, up to 1600px wide.
+3. The builder rejects landscape images under 1100px (portrait phone shots: 720px): retake. `"allow_low_res": true` is only for a crop that is small on purpose; the report badges those steps "low resolution" and you name them in `limits`. JPEG quality 85, up to 1600px wide, never lowered to save size.
 4. **Phone:** portrait shots up to 900px wide (height > 1.3x width) are drawn phone-sized, so two or three sit side by side. Capture at 390x844, device scale 2 (or `adb exec-out screencap`), and say so in `limits`. Never upscale or pad to 1280.
 
 **Cropping.**
@@ -124,7 +135,7 @@ When an ask is "how does X work?", "why does it do Y?" or "explain Z", answer it
 - A step is `{"html":"<div class=x-row>...</div>","caption":"..."}`. Build it from the kit: `.x-row` of `.x-box` joined by `<span class=x-arrow>&rarr;</span>`, `.x-box.hot` for the key one, `.x-note` for the small print, `.x-code` for code, inline `<svg viewBox>` for diagrams (use `currentColor`; it follows light and dark). Colours only from theme variables; no `<script>`, `on*=` handlers or `javascript:` links (the builder refuses them).
 - **Ground it in the real thing.** Read the code, the schema or the run first, and use the real names, files and numbers. An explanation from memory is a guess, so say so in `limits`.
 - **Detailed, not simplified.** The reader is smart and busy, not a beginner. Show the actual stages, the actual data and what breaks or branches; one concept per card, 3 to 5 cards, the cards left to right in the order the thing happens. No analogies standing in for the mechanism.
-- Cost: a detailed card is about 500 to 1,500 tokens of HTML, paid twice (once in the spec, once passed to `html_render`). Two or three cards cost less than reading one screenshot. Skip a diagram when two sentences in the chat explain it.
+- Skip a card when two sentences in the chat explain it (a card costs 500-1,500 tokens, paid twice).
 - A turn with only explanations and no UI change needs no report: use `html_render` directly (see `t3-visualize`), same kit.
 
 ## Write for the reader
@@ -150,9 +161,9 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 1. Write `<scratch>/spec.json`:
    `{"title","note","asks":[...],"flows":[{"title","summary","status","group","steps":[...]}],"limits":[...]}`;
    a step is `{"img":"/abs.png","caption","detail"}`, `{"before":"/abs.png","after":"/abs.png","caption","detail"}` (a drag-to-compare slider) or `{"html","caption"}` (an explanation). `status`, `summary`, `group` and `detail` are optional; every ask needs a `status`.
-2. `python3 -I <skill-dir>/build_report.py spec.json index.html` (needs Python 3 and Pillow: `pip install pillow`; standalone, base64 JPEGs, sticky jump bar). Read the warnings it prints (size mismatch, no ask answered, low res) and fix them. It also stops on an ask with no status and on unsafe explanation HTML.
+2. `python3 -I <skill-dir>/build_report.py spec.json index.html` (needs Python 3 and Pillow: `pip install pillow`; standalone, base64 JPEGs, sticky jump bar). It checks the whole spec first and lists every problem with its fix (missing caption or file, bad status, a step with the wrong keys, an ask with no status, unsafe explanation HTML). Then read the closing `== summary ==`: each warning (size mismatch, no ask answered, low res) is fixed or explained in `limits`.
 3. Give the user a markdown link to the absolute `.html` path (T3 opens it in the side panel; click a shot for the viewer). Never Read the HTML (megabytes of base64).
-4. **In T3 Code (`html_render` exists), also show it inline:** build with `--embed` (add `--split` for several parts; it writes `<base>-<group>.html` plus the index at the given path, images in `embed-img/<name>/`). `cat` the page (a few KB to ~30 KB, no base64) and pass it verbatim as `html_render`'s `html`, with a `title` and `height: 700`. T3 swaps each image path for its data on the server.
+4. **In T3 Code (`html_render` exists), also show it inline:** build with `--embed` (add `--split` for several parts; it writes `<base>-<group>.html` plus the index at the given path, images in `embed-img/<name>/`). `cat` the page (a few KB to ~30 KB, no base64) and pass it verbatim as `html_render`'s `html`, with a `title` and `height: 700`; a larger `height` makes the in-page script treat the inline frame as full screen. T3 swaps each image path for its data on the server.
    - Image paths must be **literal absolute paths in the markup**; a path built in JS shows broken.
    - Colours come from T3 theme variables (`--accent`, `--card`, `--border`, `--ring`, ...), never hardcoded.
    - `html_render` rejects `vh`/`dvh` units and `height:100%` on html or body, which is why the scroll box is in px. Keep it that way.

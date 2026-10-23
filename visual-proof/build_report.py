@@ -49,6 +49,14 @@ import base64, html, io, json, os, re, sys
 from PIL import Image
 
 E = html.escape
+WARNINGS = []  # every warning, repeated in one block at the end so none scrolls past
+
+
+def warn(msg):
+    if msg not in WARNINGS:  # a split build re-checks the same shots per part
+        WARNINGS.append(msg)
+        print("warning: " + msg, file=sys.stderr)
+
 
 # Fallback values for T3's theme variables, standalone report only. In the embed T3
 # injects these itself; defining them there would override the user's theme.
@@ -81,6 +89,7 @@ CSS = XP_CSS + """body{margin:0;font-family:var(--font-sans);color:var(--foregro
 .card.tall{flex-basis:min(80%,380px)}
 .lw{max-height:620px;overflow-y:auto;border-radius:var(--radius);scrollbar-width:thin}
 .card figcaption{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.55;margin:0 0 12px;min-height:3.1em}
+.lr{margin-left:auto;flex:none;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid var(--warning);color:var(--warning);white-space:nowrap}
 .n{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent,var(--primary));color:var(--accent-foreground,var(--primary-foreground));font-weight:700;font-size:13px;display:grid;place-items:center;margin-top:1px}
 .shot{border-radius:var(--radius);overflow:hidden;cursor:zoom-in;user-select:none}
 .shot img{width:100%;display:block;-webkit-user-drag:none}
@@ -163,28 +172,63 @@ def is_long(path):
     return h > w * LONG_RATIO and w > PHONE_MAX_WIDTH
 
 
+def is_low(path):
+    return Image.open(path).width < (TALL_MIN_WIDTH if is_tall(path) else MIN_WIDTH)
+
+
 def check_resolution(spec):
     """Refuse low-resolution screenshots. A 640x400 PNG shown at the card's ~950px
     width is upscaled ~1.5x and reads as blur, and nothing downstream can fix that.
-    Set "allow_low_res": true in the spec only for a deliberately small capture."""
-    low = []
-    for flow in spec["flows"]:
-        for st in flow["steps"]:
-            for k in ("img", "before", "after"):
-                if k in st:
-                    w = Image.open(st[k]).width
-                    if w < (TALL_MIN_WIDTH if is_tall(st[k]) else MIN_WIDTH):
-                        low.append(f"{st[k]} is {w}px wide")
+    Set "allow_low_res": true in the spec only for a deliberately small capture; those
+    steps then carry a visible 'low resolution' badge in the report."""
+    low = [f"{st[k]} is {Image.open(st[k]).width}px wide"
+           for flow in spec["flows"] for st in flow["steps"] for k in ("img", "before", "after")
+           if k in st and is_low(st[k])]
     if low and not spec.get("allow_low_res"):
-        sys.exit("low-resolution screenshots (need >= %dpx wide, or %dpx for a portrait phone shot), "
-                 "retake them (see SKILL.md 'Sharp screenshots'):\n  " % (MIN_WIDTH, TALL_MIN_WIDTH) + "\n  ".join(low))
+        sys.exit("low-resolution screenshots (need >= %dpx wide, or %dpx for a portrait phone shot): "
+                 "retake them at a 1280px viewport (SKILL.md 'Sharp screenshots'):\n  " % (MIN_WIDTH, TALL_MIN_WIDTH) + "\n  ".join(low))
+    if low:
+        warn(f"{len(low)} low-resolution image(s) allowed by allow_low_res; each shows a 'low resolution' badge")
+
+
+def validate(spec):
+    """Check the whole spec in one pass and name every problem with its fix, instead of
+    stopping at the first KeyError."""
+    errs = []
+    flows = spec.get("flows")
+    if not spec.get("title"):
+        errs.append("spec needs a 'title'")
+    if not flows or not isinstance(flows, list):
+        sys.exit("spec needs a non-empty 'flows' list")
+    for fi, flow in enumerate(flows, 1):
+        where = f"section {fi}"
+        if not flow.get("title"):
+            errs.append(f"{where} needs a 'title'")
+        if flow.get("status") and flow["status"] not in STATUS:
+            errs.append(f"{where}: status {flow['status']!r} is not one of {sorted(STATUS)}")
+        if not flow.get("steps"):
+            errs.append(f"{where} needs a non-empty 'steps' list")
+        for i, s in enumerate(flow.get("steps") or [], 1):
+            at = f"{where} step {i}"
+            kinds = [k for k, ok in (("img", "img" in s), ("before/after", "before" in s or "after" in s), ("html", "html" in s)) if ok]
+            if len(kinds) != 1:
+                errs.append(f"{at} needs exactly one of 'img', 'before'+'after', or 'html' (has {kinds or 'none'})")
+            if ("before" in s) != ("after" in s):
+                errs.append(f"{at} has only one of 'before' / 'after'")
+            if not s.get("caption"):
+                errs.append(f"{at} needs a 'caption' (one short sentence of what is on screen)")
+            for k in ("img", "before", "after"):
+                if k in s and not os.path.isfile(s[k]):
+                    errs.append(f"{at}: {k} file not found: {s[k]} (use an absolute path to a saved PNG)")
+    if errs:
+        sys.exit("spec problems:\n  " + "\n  ".join(errs))
 
 
 def jpeg(path, width, quality):
     im = Image.open(path).convert("RGB")
     if im.width > width:
         im = im.resize((width, int(im.height * width / im.width)))
-    buf = io.BytesIO(); im.save(buf, "JPEG", quality=quality)
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=quality, optimize=True)
     return buf.getvalue()
 
 
@@ -200,9 +244,8 @@ def check_pair(label, st):
     if st.get("full_page"):
         dh = 0  # a full-page pair differs in height when the fix changed the page length
     if dw > SIZE_TOLERANCE or dh > SIZE_TOLERANCE:
-        print(f"warning: {label}: before is {bw}x{bh}, after is {aw}x{ah} "
-              f"(width {dw:.0%}, height {dh:.0%} apart): retake with the same viewport, crop and scroll",
-              file=sys.stderr)
+        warn(f"{label}: before is {bw}x{bh}, after is {aw}x{ah} "
+             f"(width {dw:.0%}, height {dh:.0%} apart): retake the After with the Before's viewport, crop and scroll")
 
 
 def pair_ratio(st):
@@ -319,8 +362,8 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
     if embed:
         os.makedirs(img_dir, exist_ok=True)
         if len(spec["flows"]) > SPLIT_OVER:
-            print(f"warning: {len(spec['flows'])} sections in one embed page; split by area: give flows a 'group' and "
-                  "use --split (see SKILL.md 'One report, shown in the chat')", file=sys.stderr)
+            warn(f"{len(spec['flows'])} sections in one embed page; split by area: give flows a 'group' and "
+                 "use --split (see SKILL.md 'One report, shown in the chat')")
     head = CSS + CMP_CSS + (EMBED_CSS if embed else FALLBACK_VARS + VIEWER_CSS)
     out = [f"<!doctype html><html><head><meta charset=utf-8><title>{E(spec['title'])}</title><style>{head}</style></head><body>"]
     if not embed:
@@ -335,7 +378,7 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
     if asks:
         for i in range(1, nflows + 1):
             if not any(a.get("flow") == i for a in asks):
-                print(f"warning: section {i} answers no ask in 'asks'", file=sys.stderr)
+                warn(f"section {i} answers no ask in 'asks'")
         out.append("<style>.ask{margin:0 0 12px;padding:2px 0 2px 12px;border-left:3px solid var(--accent,var(--primary))}"
                    ".ask q{display:block;font-weight:600}.ask small{color:var(--muted-foreground)}.ask p{margin:2px 0 0}</style>")
 
@@ -386,7 +429,8 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
             tall = is_tall(s.get("before") or s["img"])
             if any(is_long(s[k]) for k in ("before", "after", "img") if k in s):
                 shot = f'<div class=lw>{shot}</div>'
-            out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span></figcaption>{shot}{detail}</figure>')
+            lr = '<span class=lr>low resolution</span>' if any(is_low(s[k]) for k in ("before", "after", "img") if k in s) else ""
+            out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span>{lr}</figcaption>{shot}{detail}</figure>')
         out.append("</div></section>")
     if checklist and asks:
         out.append(ask_checklist(asks, lambda a: (f"#flow{a['flow']}", f"section {a['flow']}") if a.get("flow") else None))
@@ -408,15 +452,16 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
 if __name__ == "__main__":
     spec_path, out_path, *flags = sys.argv[1:]
     spec, embed = json.load(open(spec_path)), "--embed" in flags
+    validate(spec)
     if "--split" in flags:
         parts = split_spec(spec)
         total = len(spec["flows"])
         if total <= SPLIT_OVER or len(parts) < 2:
-            print(f"warning: --split is not needed for {total} sections in {len(parts)} group(s); one page reads better "
-                  f"(split only over {SPLIT_OVER} sections, into at most {MAX_PARTS} parts)", file=sys.stderr)
+            warn(f"--split is not needed for {total} sections in {len(parts)} group(s); one page reads better "
+                 f"(split only over {SPLIT_OVER} sections, into at most {MAX_PARTS} parts)")
         elif len(parts) > MAX_PARTS or any(len(sub["flows"]) < MIN_PART for _, sub in parts):
-            print(f"warning: {len(parts)} parts of {[len(sub['flows']) for _, sub in parts]} sections; merge groups so there are "
-                  f"at most {MAX_PARTS} parts of {MIN_PART}+ sections each", file=sys.stderr)
+            warn(f"{len(parts)} parts of {[len(sub['flows']) for _, sub in parts]} sections; merge groups so there are "
+                 f"at most {MAX_PARTS} parts of {MIN_PART}+ sections each")
         base, ext = os.path.splitext(out_path)
         names = [f"{base}-{slug(g)}{ext}" for g, _ in parts]
         for (g, sub), path in zip(parts, names):
@@ -424,3 +469,15 @@ if __name__ == "__main__":
         build_index(spec, parts, out_path, embed, [os.path.basename(x) for x in names])
     else:
         build(spec, out_path, embed)
+    flows = spec["flows"]
+    counts = {}
+    for f in flows:
+        counts[f.get("status") or "no status"] = counts.get(f.get("status") or "no status", 0) + 1
+    print("\n== summary ==")
+    print(f"{len(flows)} sections ({', '.join(f'{v} {k}' for k, v in counts.items())}), {len(spec.get('asks') or [])} asks")
+    if embed:
+        print("html_render: pass the page verbatim with height 700 (no more) and a title in everyday words, e.g. "
+              f"title={spec['title']!r}")
+    print(f"{len(WARNINGS)} warning(s)" + (": fix them or say why in 'limits':" if WARNINGS else ""))
+    for w in WARNINGS:
+        print("  - " + w)
