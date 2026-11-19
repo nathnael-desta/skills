@@ -31,12 +31,16 @@ Save it as `prompt.md` in the research folder. Avoid backticks and `${` in it: i
 
 Open one tab per mode with `tabs` action `new`, an `id` (`gemini-dr`, `gemini-task`) and `keepOpen: true`, at `https://gemini.google.com/app`. Two tabs in parallel worked; more is untested.
 
+**Always use the Neon model**, in both tabs, before choosing the mode. Read the picker's label first: `button` whose `aria-label` starts with "Open mode picker, currently". If it does not end in "Neon", open it and pick `menuitemradio` "Deeper analysis … Neon" (match `/Neon/`), then read the label again. Leave the thinking level as it is unless the user asks. If Neon is missing from the picker, stop and tell the user; don't fall back to another model.
+
 | Mode | Select | Verify |
 |---|---|---|
-| Deep Research | `button "Upload & tools"`, then `menuitemcheckbox "Deep research"` | chip `button "Deselect Deep research"`; placeholder "What do you want to research?" |
-| Task | `button "Task"` (exact) on the home screen | heading "What can I get going for you?" |
+| Deep Research | `button "Upload & tools"`, then `menuitemcheckbox "Deep research"`, clicked in the page: `page.evaluate(() => [...document.querySelectorAll('[role=menuitemcheckbox]')].find(e => e.innerText.trim() === 'Deep research').click())` | chip `button "Deselect Deep research"`; placeholder "What do you want to research?" |
+| Task | `button "Task"` (exact) on the home screen | the Task home screen heading (it changes: "What can I get going for you?", later "Let's clear your plate"); the picker still reads Neon |
 
-Paste with `fill()` on the `[role=textbox]`, check `innerText.length` (about one extra character per paragraph break), then `button "Send message"`.
+A normal `locator.click()` on the Deep research menu item landed on "Create image" twice (19 Nov 2026), probably because the menu is still animating; the in-page click above works. Check for a "Deselect Images" chip and remove it if one appears.
+
+Before sending, check the picker label still reads Neon. Paste with `fill()` on the `[role=textbox]`, check `innerText.length` (about one extra character per paragraph break), then `button "Send message"`.
 
 **Record the chat id at once**: poll `page.url()` for `/app/<id>`. The Deep Research tab may fall back to an empty "Where should we start?" screen with the URL still `/app` even though the send worked. Reload and open the newest sidebar chat by its generated title. Do not conclude it failed from an empty screen.
 
