@@ -9,6 +9,10 @@ Gemini runs the long search; you write the prompt, drive the tabs, extract the r
 
 Load the `browse` skill first; this file only adds what is specific to Gemini.
 
+## What it is good for
+
+Use Gemini for a sweep of prior art and as a list of claims to check, not as a substitute for measuring. When the data is local and can be measured (files, builds, benchmarks), measure it yourself, in parallel with the Gemini runs. On 20 Nov 2026 the reports projected 20-250 KB for a weekly update; building the real patches measured 2.4 KB, because no report could see a layout quirk in the data that only a real diff exposed. The reports still paid off with a few leads that changed the design (a native decoder already in the framework, an API the runtime lacks), each checked in the source before use.
+
 ## Rules
 
 - **Privacy.** The prompt contains only the question and the context it needs. No names, emails, account details, repo paths, company or project names unless the user says they may go. Never return a full `snapshot()`: it prints the Google account name and email and every chat title in the sidebar. Read the page with `page.evaluate` or `snapshot({ find })`.
@@ -35,8 +39,8 @@ Open one tab per mode with `tabs` action `new`, an `id` (`gemini-dr`, `gemini-ta
 
 | Mode | Select | Verify |
 |---|---|---|
-| Deep Research | `button "Upload & tools"`, then `menuitemcheckbox "Deep research"`, clicked in the page: `page.evaluate(() => [...document.querySelectorAll('[role=menuitemcheckbox]')].find(e => e.innerText.trim() === 'Deep research').click())` | chip `button "Deselect Deep research"`; placeholder "What do you want to research?" |
-| Task | `button "Task"` (exact) on the home screen | the Task home screen heading (it changes: "What can I get going for you?", later "Let's clear your plate"); the picker still reads Neon |
+| Deep Research | `button "Upload & tools"`, then (since 20 Nov 2026) its "More tools" item, then `menuitemcheckbox "Deep research"`, clicked in the page: `page.evaluate(() => [...document.querySelectorAll('[role=menuitemcheckbox]')].find(e => e.innerText.trim() === 'Deep research').click())` | chip `button "Deselect Deep research"`; placeholder "What do you want to research?" |
+| Task | `button "Task"` (exact) on the home screen | the Task home screen heading (it changes: "What can I get going for you?", "Let's clear your plate", "Say the word, I'll take it from here"); the picker still reads Neon |
 
 A normal `locator.click()` on the Deep research menu item landed on "Create image" twice (19 Nov 2026), probably because the menu is still animating; the in-page click above works. Check for a "Deselect Images" chip and remove it if one appears.
 
@@ -48,11 +52,13 @@ Before sending, check the picker label still reads Neon. Paste with `fill()` on 
 
 Background tabs freeze Gemini's rendering: in-place waits and screenshots show "Thinking" forever. Reload about once a minute: `page.reload()`, wait 5 s, then check button labels with `page.evaluate`. Do not use `snapshot({ find: /research/ })`, because the pasted prompt matches.
 
-- **Deep Research plan ready:** a `Start research` button exists. Click it. Research then takes about 6 minutes (up to 60).
+- **Deep Research plan ready:** a `Start research` button exists. Click it. Research then took about 6 minutes in the first run and over an hour on 20 Nov 2026.
 - **Deep Research done:** `Share & Export` exists and `Stop response` does not.
 - **Task done:** "Complete" shows and `Stop response` does not (about 7 minutes in the first run).
 
-Stop at 45 minutes and tell the user. Never poll faster than once a minute.
+Never block on a run. Keep doing your own work while it runs and check between steps, never faster than once a minute.
+
+At 45 minutes, stop polling a run that is still going. Tell the user it is still running, leave its tab open, and finish without it. Say "not finished yet", never that it added nothing. The user may tell you when it finishes or hand you the report. Then extract it (section 4), check it (section 5), and report what it adds beyond what you already have. The open tab is the handoff; nothing else is needed.
 
 ## 4. Extract
 
@@ -70,4 +76,4 @@ Save `gemini-deep-research.md` and `gemini-tasks.md`.
 
 ## Tell the user
 
-Where the files are, whether each run finished, which key numbers you checked and which you corrected, and that the tabs are left open. Ask before deleting any chat.
+Where the files are, whether each run finished, which key numbers you checked and which you corrected, and that the tabs are left open. Name what each report added that you had not found yourself, and where its projections disagreed with your measurements. Ask before deleting any chat.
