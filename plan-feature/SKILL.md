@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Plan Feature
 
-Create the planning artifacts that `/implement-spec` and `/execute-feature` consume. This skill
+Create the planning artifacts that `/implement-spec` consumes. This skill
 plans only; it never starts implementation or closes the parent issue.
 
 ## Preconditions

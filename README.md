@@ -40,33 +40,14 @@ Update, list, remove and the lock file: [docs/installation.md](docs/installation
   deployed SHA, health gate, migrations, gating on the tree CI passed) and a
   shimmed-docker harness to simulate the deploy script.
 
-### Reviews and handoffs
+### Handoffs and planning
 
-- `codex-code-review` - review local changes with the OpenAI Codex CLI: staged,
-  branch-diff, security and performance reviews, with prompts and a runner
-  script.
 - `claude-session-handoff` - turn a Claude Code session from a repository or
   worktree into a redacted Markdown handoff for a fresh agent.
-- `end-to-end-feature-explainer` - explain a finished feature or ticket sequence
-  end to end: spec, tickets, architecture, runtime flows, checks and remaining
-  limits.
-
-### Feature workflow
-
-These build on Matt Pocock's skills (`wayfinder`, `grilling`, `to-spec`,
-`to-tickets`); install those from
-[mattpocock/skills](https://github.com/mattpocock/skills) first.
-
 - `plan-feature` - turn a settled Wayfinder or grilling outcome into one spec
-  issue and approved, dependency-ordered tickets, without starting work.
-- `execute-feature` - implement an approved spec's tickets in order, or in
-  parallel worktree batches when they are independent, with a review per ticket.
-- `ship-feature` - plan-feature and execute-feature in one run, ending in an
-  acceptance report.
-- `finish-ticket` - check a finished ticket and list what is still required
-  before closing it.
-- `prototype-review` - review a throwaway prototype against its Wayfinder
-  question and produce a short decision brief.
+  issue and approved, dependency-ordered tickets, without starting work. Builds
+  on Matt Pocock's `wayfinder`, `grilling`, `to-spec` and `to-tickets`; install
+  those from [mattpocock/skills](https://github.com/mattpocock/skills) first.
 
 ### Browser and visuals
 
@@ -78,13 +59,6 @@ These build on Matt Pocock's skills (`wayfinder`, `grilling`, `to-spec`,
 - `gemini-research` - research with Gemini Deep Research and Gemini Tasks in
   the user's own browser: prompt template, parallel tabs, extraction, and
   checking key numbers against the sources. Needs the `browse` CLI.
-
-### Other
-
-- `antigravity-delegation` - hand screenshots, PDFs, diagrams and whole-repo
-  reads to Google Gemini through Antigravity, with what it may and may not do.
-- `update-catalog` - write feature breakdowns, changelogs and "what's new"
-  catalogs for a project in a fixed format.
 
 ## Development
 
