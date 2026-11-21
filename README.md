@@ -40,15 +40,6 @@ Update, list, remove and the lock file: [docs/installation.md](docs/installation
   deployed SHA, health gate, migrations, gating on the tree CI passed) and a
   shimmed-docker harness to simulate the deploy script.
 
-### Handoffs and planning
-
-- `claude-session-handoff` - turn a Claude Code session from a repository or
-  worktree into a redacted Markdown handoff for a fresh agent.
-- `plan-feature` - turn a settled Wayfinder or grilling outcome into one spec
-  issue and approved, dependency-ordered tickets, without starting work. Builds
-  on Matt Pocock's `wayfinder`, `grilling`, `to-spec` and `to-tickets`; install
-  those from [mattpocock/skills](https://github.com/mattpocock/skills) first.
-
 ### Browser and visuals
 
 - `visual-proof` - drive the real app, fix what you find, re-walk it, and hand
