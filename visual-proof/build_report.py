@@ -46,7 +46,7 @@ the standalone file defines neutral light/dark fallbacks for the same names. Nev
 hardcode a colour anywhere else.
 """
 import base64, html, io, json, os, re, sys
-from PIL import Image
+from PIL import Image, ImageDraw
 
 E = html.escape
 WARNINGS = []  # every warning, repeated in one block at the end so none scrolls past
@@ -115,7 +115,22 @@ ul{font-size:14px;line-height:1.6;color:var(--muted-foreground);padding-left:20p
 .part{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border)}
 .part h3{margin:0}.part ol{margin:4px 0 0;padding-left:22px;width:100%;color:inherit;font-size:14px}
 .st{display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin-left:10px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--c);color:var(--foreground)}
-.st::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}"""
+.st::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
+.shot{position:relative}
+.pins{position:absolute;left:0;top:0;width:100%;pointer-events:none}
+.mk{position:absolute;box-sizing:border-box;border:2px solid var(--c,var(--destructive));border-radius:4px;box-shadow:0 0 0 1px rgba(255,255,255,.6)}
+.mk b{position:absolute;left:-9px;top:-9px;min-width:18px;height:18px;box-sizing:border-box;border-radius:9px;background:var(--c,var(--destructive));color:#fff;font:700 11px/18px sans-serif;text-align:center;padding:0 4px}
+.mk.l b{left:-2px}.mk.t b{top:-2px}
+.pins.pa{--c:var(--success)}
+ol.lg{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:0}
+.lg>li{padding:12px 0;border-top:1px solid var(--border)}
+.lt{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.45;font-weight:600;color:var(--foreground)}
+.lt i{flex:none;min-width:20px;height:20px;box-sizing:border-box;border-radius:10px;background:var(--destructive);color:#fff;font:700 11.5px/20px sans-serif;font-style:normal;text-align:center;padding:0 4px}
+.dc{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px;margin-top:8px}
+.dc.one{grid-template-columns:1fr}.dc figure{margin:0}.dc img{width:100%;display:block;border:1px solid var(--border);border-radius:var(--radius)}
+.dc figcaption{display:block;min-height:0;margin:3px 0 0;font-size:11.5px;font-weight:600;color:var(--muted-foreground);margin-top:3px}
+.ph{display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);border-radius:var(--radius);color:var(--muted-foreground);font-size:13px;text-align:center;padding:8px;box-sizing:border-box}
+.auto{font-size:12.5px;color:var(--muted-foreground);margin:10px 0 0}"""
 
 # Issue status -> theme colour. Colour sits on the border and dot, never a fill.
 STATUS = {"fixed": "--success", "partial": "--warning", "needs decision": "--warning",
@@ -240,8 +255,137 @@ def validate(spec):
             for k in ("img", "before", "after"):
                 if k in s and not os.path.isfile(s[k]):
                     errs.append(f"{at}: {k} file not found: {s[k]} (use an absolute path to a saved PNG)")
+            if all(os.path.isfile(s[k]) for k in ("img", "before", "after") if k in s):
+                errs += check_marks(at, s)
     if errs:
         sys.exit("spec problems:\n  " + "\n  ".join(errs))
+
+
+MAX_MARKS = 6  # more than this on one shot and the numbers stop helping: split the shot or the section
+
+
+def mark_rects(s):
+    """Normalise a step's marks to (label, before_rect, after_rect) for pair steps or
+    (label, rect, None) for single shots. A rect is [x, y, w, h] in the source image's pixels."""
+    out = []
+    for m in s.get("marks") or []:
+        if "before" in s:
+            out.append((m["label"], m.get("before"), m.get("after")))
+        else:
+            out.append((m["label"], m.get("rect"), None))
+    return out
+
+
+def pins_html(path, rects, cls=""):
+    """Outline boxes with number tags, positioned in % of the source image so they stay on
+    their element at any display width. rects: list of (number, [x, y, w, h])."""
+    W, H = Image.open(path).size
+    items = []
+    for n, (x, y, w, h) in rects:
+        c = ("l " if x < 16 else "") + ("t" if y < 16 else "")
+        items.append(f'<i class="mk {c.strip()}" style="left:{x / W * 100:.3f}%;top:{y / H * 100:.3f}%;'
+                     f'width:{w / W * 100:.3f}%;height:{h / H * 100:.3f}%"><b>{n}</b></i>')
+    return f'<div class="pins {cls}" style="aspect-ratio:{W}/{H}">' + "".join(items) + "</div>"
+
+
+CROP_PAD = 40  # context kept around a marked rect, in image pixels
+CROP_MIN = (420, 220)  # a tiny rect still gets a window this big so the crop is readable
+CROP_MAX_W = 1000
+RED, GREEN = (220, 38, 38), (22, 163, 74)
+
+
+def crop_window(rects, size):
+    """One crop window that fits every rect plus padding. Before and After use the same
+    window size so the two crops line up side by side."""
+    w = max([r[2] + 2 * CROP_PAD for r in rects] + [CROP_MIN[0]])
+    h = max([r[3] + 2 * CROP_PAD for r in rects] + [CROP_MIN[1]])
+    return min(w, size[0]), min(h, size[1])
+
+
+def crop_to(im, rect, win, color):
+    """The window centred on rect (clamped inside the image) with the rect outlined, as JPEG bytes."""
+    x, y, w, h = rect
+    ww, wh = win
+    x0 = int(min(max(x + w / 2 - ww / 2, 0), im.width - ww))
+    y0 = int(min(max(y + h / 2 - wh / 2, 0), im.height - wh))
+    c = im.crop((x0, y0, x0 + ww, y0 + wh)).convert("RGB")
+    ImageDraw.Draw(c).rectangle([x - x0, y - y0, x - x0 + w, y - y0 + h], outline=color, width=2)
+    if c.width > CROP_MAX_W:
+        c = c.resize((CROP_MAX_W, int(c.height * CROP_MAX_W / c.width)))
+    buf = io.BytesIO(); c.save(buf, "JPEG", quality=85, optimize=True)
+    return buf.getvalue()
+
+
+def check_marks(at, s):
+    if "marks" not in s:
+        return []
+    errs = []
+    if "html" in s:
+        return [f"{at}: 'marks' needs a screenshot step"]
+    if len(s["marks"]) > MAX_MARKS:
+        warn(f"{at}: {len(s['marks'])} marks on one shot; more than {MAX_MARKS} stop helping, split the shot")
+    for i, m in enumerate(s["marks"], 1):
+        if not m.get("label"):
+            errs.append(f"{at} mark {i} needs a 'label'")
+        keys = ("before", "after") if "before" in s else ("rect",)
+        if not any(m.get(k) for k in keys):
+            errs.append(f"{at} mark {i} needs {' or '.join(repr(k) for k in keys)}: [x, y, w, h] in the screenshot's pixels")
+        for k in keys:
+            r = m.get(k)
+            if not r:
+                continue
+            path = s["before" if k == "before" else "after" if k == "after" else "img"]
+            W, H = Image.open(path).size
+            if len(r) != 4 or r[0] < 0 or r[1] < 0 or r[2] <= 0 or r[3] <= 0 or r[0] + r[2] > W + 2 or r[1] + r[3] > H + 2:
+                errs.append(f"{at} mark {i} {k} {r} is outside the {W}x{H} screenshot (rects are [x, y, w, h] in image pixels; multiply CSS px by devicePixelRatio)")
+    return errs
+
+
+MAX_AUTO = 12
+
+
+def expand_auto_marks(spec):
+    """"auto_marks": true on a before/after step: find what changed by diffing the two
+    PNGs (row-aligned, so layout shift is not reported) and turn each change into a mark.
+    Costs the agent nothing; a hand-written label list under "marks" still wins."""
+    for flow in spec["flows"]:
+        for i, s in enumerate(flow["steps"], 1):
+            if not s.get("auto_marks") or s.get("marks") or "before" not in s:
+                continue
+            try:
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                import autodiff
+                res = autodiff.run(s["before"], s["after"], "shift")
+            except ImportError as e:
+                warn(f"auto_marks skipped ({e}); needs numpy and scipy")
+                continue
+            pairs = autodiff.pair_regions(res["regions"])
+            W, H = Image.open(s["before"]).size
+            rect = lambda m: m["before"] or m["after"]
+            # A page-wide thin strip is what a layout shift leaves behind (a row of content that moved),
+            # not a change someone made; drop it and say so under the shot.
+            strips = [m for m in pairs if any(r and (r[2] >= 0.9 * W and r[3] < 0.05 * H or r[2] >= 0.15 * W and r[3] < 12)
+                                              for r in (m["before"], m["after"]))]
+            pairs = [m for m in pairs if m not in strips]
+            if len(pairs) > MAX_AUTO:
+                warn(f"section {flow['title']!r} step {i}: auto_marks found {len(pairs)} changed regions, "
+                     f"more than {MAX_AUTO}; showing the largest. Live data or animation changes between the shots: "
+                     "freeze it, or write the marks by hand")
+                pairs.sort(key=lambda m: -(lambda r: r[2] * r[3])(rect(m)))
+                pairs = sorted(pairs[:MAX_AUTO], key=lambda m: rect(m)[1])
+            elif len(pairs) > MAX_MARKS:
+                warn(f"section {flow['title']!r} step {i}: auto_marks found {len(pairs)} changed regions; a pair of shots with this many changes is better split")
+            if not pairs:
+                warn(f"section {flow['title']!r} step {i}: auto_marks found no difference between before and after")
+
+            def label(n, m):
+                kind = "Removed" if not m["after"] else "New" if not m["before"] else "Changed"
+                big = any(r and r[2] * r[3] > 0.12 * W * H for r in (m["before"], m["after"]))
+                return f"{kind} area {n}" + (" (several edits merged: look closely)" if big else "")
+            s["marks"] = [{"label": label(n, m), **{k: v for k, v in m.items() if v}} for n, m in enumerate(pairs, 1)]
+            s["_auto_note"] = ("Boxes come from a pixel diff, not from a person: they show where pixels changed, "
+                               "so check each crop. " + (f"{len(strips)} thin or page-wide strip(s) ignored as layout-shift leftovers." if strips else ""))
+            s["_auto_ms"] = res["ms"]
 
 
 def jpeg(path, width, quality):
@@ -415,14 +559,40 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
                        + f" &middot; <b>{E(a['status'])}</b></p></div>"
                        for a in asks if a.get("flow") == fi)
 
-    def src(path, name):
-        # Up to 1600px so the 1:1 view in the standalone report has detail to show.
-        data = jpeg(path, 1600, 85)
+    def put(data, name):
         if not embed:
             return "data:image/jpeg;base64," + base64.b64encode(data).decode()
         dst = os.path.join(img_dir, f"{name}.jpg")
         open(dst, "wb").write(data)
         return dst
+
+    def src(path, name):
+        # Up to 1600px so the 1:1 view in the standalone report has detail to show.
+        return put(jpeg(path, 1600, 85), name)
+
+    def details(s, n):
+        """One row per mark: number, label, and a zoomed crop of that spot (Before | After for a pair),
+        so the reader sees each change at a readable size instead of hunting through the full page."""
+        mr = mark_rects(s)
+        if not mr:
+            return ""
+        pair = "before" in s
+        ims = {k: Image.open(s[k]) for k in (("before", "after") if pair else ("img",))}
+        size = (min(i.width for i in ims.values()), min(i.height for i in ims.values()))
+        rows = []
+        for k, (label, rb, ra) in enumerate(mr, 1):
+            win = crop_window([r for r in (rb, ra) if r], size)
+            cols = [("Before", rb, "before", RED), ("After", ra, "after", GREEN)] if pair else [(None, rb, "img", RED)]
+            figs = []
+            for cap, r, key, col in cols:
+                c = f"<figcaption>{cap}</figcaption>" if cap else ""
+                if r:
+                    figs.append(f'<figure><img src="{put(crop_to(ims[key], r, win, col), f"{n:02d}-m{k}{key[0]}")}" alt="">{c}</figure>')
+                else:
+                    why = "Not there yet (new)" if key == "before" else "Gone from the page (removed)"
+                    figs.append(f'<figure><div class=ph style="aspect-ratio:{win[0]}/{win[1]}">{why}</div>{c}</figure>')
+            rows.append(f'<li><div class=lt><i>{k}</i><span>{E(label)}</span></div><div class="dc{" one" * (win[0] > 700)}">{"".join(figs)}</div></li>')
+        return "<ol class=lg>" + "".join(rows) + "</ol>"
 
     n = 0
     for fi, flow in enumerate(spec["flows"], 1):
@@ -447,18 +617,24 @@ def build(spec, out_path, embed, with_limits=True, checklist=True):
                 continue
             if "before" in s:
                 check_pair(f"section {fi} step {i}", s)
-                shot = (f'<div class="shot cmp" style="aspect-ratio:{pair_ratio(s)}"><img class=before data-v=before src="{src(s["before"], f"{n:02d}-before")}" alt="Before">'
-                        f'<img class=after data-v=after src="{src(s["after"], f"{n:02d}-after")}" alt="After">'
+                mr = mark_rects(s)
+                pb = pins_html(s["before"], [(k, r[1]) for k, r in enumerate(mr, 1) if r[1]]) if mr else ""
+                pa = pins_html(s["after"], [(k, r[2]) for k, r in enumerate(mr, 1) if r[2]], "pa after") if mr else ""
+                shot = (f'<div class="shot cmp" style="aspect-ratio:{pair_ratio(s)}"><img class=before data-v=before src="{src(s["before"], f"{n:02d}-before")}" alt="Before">{pb}'
+                        f'<img class=after data-v=after src="{src(s["after"], f"{n:02d}-after")}" alt="After">{pa}'
                         '<span class=bar></span><span class="tag tb">Before</span><span class="tag ta">After</span>'
                         '<input type=range min=0 max=100 value=50 aria-label="Before / after"></div>')
             else:
-                shot = f'<div class=shot><img src="{src(s["img"], f"{n:02d}")}" alt=""></div>'
+                mr = mark_rects(s)
+                pn = pins_html(s["img"], [(k, r[1]) for k, r in enumerate(mr, 1) if r[1]]) if mr else ""
+                shot = f'<div class=shot><img src="{src(s["img"], f"{n:02d}")}" alt="">{pn}</div>'
             detail = f'<p class=detail>{E(s["detail"])}</p>' if s.get("detail") else ""
+            detail += f'<p class=auto>{E(s["_auto_note"])}</p>' if s.get("_auto_note") else ""
             tall = is_tall(s.get("before") or s["img"])
             if any(is_long(s[k]) for k in ("before", "after", "img") if k in s):
                 shot = f'<div class=lw>{shot}</div>'
             lr = '<span class=lr>low resolution</span>' if any(is_low(s[k]) for k in ("before", "after", "img") if k in s) else ""
-            out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span>{lr}</figcaption>{shot}{detail}</figure>')
+            out.append(f'<figure class="card{" tall" * tall}" id=s{n}><figcaption><span class=n>{i}</span><span>{E(s["caption"])}</span>{lr}</figcaption>{shot}{details(s, n)}{detail}</figure>')
         out.append("</div></section>")
     if checklist and asks:
         out.append(ask_checklist(asks, lambda a: (f"#flow{a['flow']}", f"section {a['flow']}") if a.get("flow") else None))
@@ -481,6 +657,7 @@ if __name__ == "__main__":
     spec_path, out_path, *flags = sys.argv[1:]
     spec, embed = json.load(open(spec_path)), "--embed" in flags
     validate(spec)
+    expand_auto_marks(spec)
     if "--split" in flags:
         parts = split_spec(spec)
         total = len(spec["flows"])
@@ -504,7 +681,7 @@ if __name__ == "__main__":
     print("\n== summary ==")
     print(f"{len(flows)} sections ({', '.join(f'{v} {k}' for k, v in counts.items())}), {len(spec.get('asks') or [])} asks")
     if embed:
-        print("html_render: pass the page verbatim with height 700 (no more) and a title in everyday words, e.g. "
+        print("html_render: pass the file as html_render's path (not as html) with height 700 (no more) and a title in everyday words, e.g. "
               f"title={spec['title']!r}")
     print(f"{len(WARNINGS)} warning(s)" + (": fix them or say why in 'limits':" if WARNINGS else ""))
     for w in WARNINGS:

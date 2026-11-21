@@ -5,7 +5,7 @@ description: "MANDATORY, invoke before the first edit, when the user sends feedb
 
 # Visual proof report
 
-The user is busy and wants to *see* the work: a flow end to end, or each reported issue shown
+The user is busy and wants to _see_ the work: a flow end to end, or each reported issue shown
 broken, then fixed. Output: one HTML file with a snap-scrolling row of numbered steps per section,
 plus (in T3 Code) an inline copy in the chat. Applies to whoever drives the browser, the main
 agent or a subagent; the project's browser rules win (which tool, banned tools, where scratch files go).
@@ -33,20 +33,22 @@ Skip the report only for changes nobody can see (backend, docs, tests, scripts) 
 Driving the real app is for finding real problems and fixing them. A "not fixed" on something you
 could have fixed is a failed run.
 
-- **Only these stay open, each with a stated reason:** owner decisions, missing data or environment, backend or production concerns outside this task.
+- **Only these stay open, each with a stated reason:** missing data or environment, backend or production concerns outside this task, and the irreversible or outward-facing calls listed under _Decide, do not park_ below.
+- **Decide, do not park.** The owner is busy and does not want a queue of questions. When a finding turns on a product or design call (which option, a threshold, a guard, a default, a trade-off), **pick the best option yourself, implement it, re-walk it, and report it**; do not stop at `needs decision`. Choose the option that follows the project's documented rules and the user's stated goals, keeps every existing capability, and is cheapest to undo. Record each one as you make it in `<scratch>/decisions.md`: the question, the options considered, the choice, the reason, and how to undo it. Still ask first (leave `needs decision`, with the question, A/B/C and your recommendation) only for: money or payments, deleting or migrating user data, schema or public API changes, sending anything outside the machine (deploys, pushes, emails, uploads), and anything the user or the project has said never to change without asking. The user can override any decision afterwards; say how. **Delegate the building of decisions the same way as any other fix:** hand each decision's implementation to Haiku fixers (one per non-overlapping set of files, the choice and the files in the brief, written as an instruction, not a question), then Haiku re-walks it. The main agent only makes the call, reads the diff and writes the report.
+- **Report the decisions at the end.** The reply, after the report, ends with a **Decisions I made** list: one line each (the question, what you chose, why, how to undo), in the same order as the report sections. The report shows each as a normal section with status `fixed`, whose `summary` starts "Decision made:" and names the alternatives you rejected. Do not hide them inside the fixed count: say "N decisions made by me" next to the asks count.
 - **A fix is not done until you re-ran the path in the browser** and captured a fresh After (or a measurement). A claimed fix without one is `unverified`, never `fixed`.
-- **A product call is still fixed.** Where a documented decision conflicts with the user's own stated rule, fix toward the user's rule and flag it in the section (`fixed`, plus the note), instead of leaving it open.
-- **Loop:** walk, catalog, fix, re-walk. The re-walk *is* the next loop's walk: any new or surviving bug goes back into the catalog and gets fixed, then walked again. There is no fixed number of loops. Stop on one fully clean pass, or when only the open kinds above remain.
+- **A product call is still fixed.** Where a documented decision conflicts with the user's own stated rule, fix toward the user's rule and flag it in the section (`fixed`, plus the note), instead of leaving it open. The same goes for any open product call: see _Decide, do not park_.
+- **Loop:** walk, catalog, fix, re-walk. The re-walk _is_ the next loop's walk: any new or surviving bug goes back into the catalog and gets fixed, then walked again. There is no fixed number of loops. Stop on one fully clean pass, or when only the open kinds above remain.
 - **Runaway guard:** if the same item still fails after three fix attempts, or three passes in a row find no fewer problems than the one before, stop looping on it and report it open with the reason.
 
 ## Phases, parallel agents and worktrees
 
 Two phases with different needs; this is what makes a run fast.
 
-| Phase | Edits code? | Parallel agents | Worktree |
-|---|---|---|---|
-| **Catalog** (walk, shoot, note issues) and **re-walk** | no | yes: 3-4 cheap agents, each an area or role, all on the **one running app** | not needed |
-| **Fix** | yes | yes, if each agent owns different files | one per concurrent fixer; none for a single fixer |
+| Phase                                                  | Edits code? | Parallel agents                                                             | Worktree                                          |
+| ------------------------------------------------------ | ----------- | --------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Catalog** (walk, shoot, note issues) and **re-walk** | no          | yes: 3-4 cheap agents, each an area or role, all on the **one running app** | not needed                                        |
+| **Fix**                                                | yes         | yes, if each agent owns different files                                     | one per concurrent fixer; none for a single fixer |
 
 - **Befores come from the catalog walk** of the unedited app, so they never need a second checkout or server.
 - **Catalog agents** each get their own browser session and, when roles log in at once, their own cookie scope (`127.0.0.1` vs `localhost`) or run in turn. They write only into `<scratch>`.
@@ -58,11 +60,12 @@ Two phases with different needs; this is what makes a run fast.
   - Speed never trades resolution: every shot meets the sizes under Sharp screenshots.
 
 **Verdict: catalog first, fix in batches, then walk again.** Do not fix as you meet each problem.
+
 - During a walk only record: a screenshot plus one line per problem in `issues.md` (or the manifest).
 - After the walk, fix in batches grouped by file or component. Cataloguing first exposes shared
   causes, so one fix closes several findings, and it keeps the walk on one stable build so the
   later Befores still match what the user saw.
-- Re-walk *everything*, not only the fixed items: it proves each fix and catches regressions the fixes caused.
+- Re-walk _everything_, not only the fixed items: it proves each fix and catches regressions the fixes caused.
 - **Exception:** a blocker that stops the walk (login broken, page crashes) is fixed at once.
 - **Keep it cheap** (per the project's cost policy; the author's is `~/.claude/modes/active.md`): a Haiku-class agent walks and captures. Fixing is a separate job so the walk's window is not filled with code: small, clearly specified fixes (copy, a one-file CSS or prop change; give it the issue line and the file) go to Haiku, which is cheaper and quicker than the big model reading the file. Cross-file, logic or behaviour changes, or anything Haiku got wrong once, go to Sonnet or the main agent. Haiku re-walks.
 
@@ -76,7 +79,7 @@ Capturing is nearly free; **reading images and re-sending long context are the c
    contact sheet (`montage -label %t -tile 4x -geometry 600x470+3+3 ...`), read once.
 3. **Name shots as you save them**: `<scratch>/raw/NN-step.png`. Never rebuild order from mtimes.
 4. **Wait for lagging UI** (modals, toasts, spinners) on a selector, then shoot. A spinner or empty page is a failed shot.
-5. With Browser Control, pass `style: "[id^=__browser_control]{display:none!important}"` to `page.screenshot`; retry a timed-out shot in the same script (up to 4 tries) rather than re-running the walk.
+5. With `browse`, pass `style: "[id^=__browse_],[id^=__browser_control]{display:none!important}"` to `page.screenshot`; retry a timed-out shot in the same script (up to 4 tries) rather than re-running the walk.
 
 ## Delegating the browser run
 
@@ -87,7 +90,7 @@ Capturing is nearly free; **reading images and re-sending long context are the c
 ## Default look: the project's language, light
 
 Every shot uses the project's default language and the light theme (English and light in the author's projects) unless the work is about something else; set both before the first
-capture (the toggle shows the *other* language) and note any deviation in the caption or `limits`.
+capture (the toggle shows the _other_ language) and note any deviation in the caption or `limits`.
 
 - Check `document.documentElement.lang` is the default language and `document.documentElement` has no `dark` class (test accounts and dev browsers remember another language and dark).
 - When a change touches copy, layout or colours, add a **second-language** (e.g. Amharic, or the longest-text language) and a **dark** shot after the base ones. Unchecked variants go in `limits`.
@@ -101,33 +104,49 @@ capture (the toggle shows the *other* language) and note any deviation in the ca
 4. **Phone:** portrait shots up to 900px wide (height > 1.3x width) are drawn phone-sized, so two or three sit side by side. Capture at 390x844, device scale 2 (or `adb exec-out screencap`), and say so in `limits`. Never upscale or pad to 1280.
 
 **Full page is the default.** Shoot every screen and state as a full page: `page.screenshot({ fullPage: true, path, style })` at the 1280-wide viewport. The reader sees what sits above and below the change (ordering, spacing, what else is on the page), and the report shows a long shot at full card width in a 620px box that scrolls; clicking opens it whole in the viewer.
+
 - Scroll the page once first so lazy content loads. Keep a shot under ~10000px tall; split a longer page at a section break.
 - **Crop only when full page cannot show it:** a modal, dropdown, toast or other overlay (shoot the viewport with it open), or a 10000px+ page where one small element is the whole point (a clip rect, with surroundings so the reader sees where it is). Never crop out the label that explains the screen (heading, tab, field name).
 - **Pairs:** the After is the same kind of shot as the Before: same full-page or crop, viewport, scroll, language and theme. A pair of full pages may differ in height because the fix changed the page length; mark it `"full_page": true` on the step (taller than 1.8x the width is detected automatically) and the builder skips the height warning (the width must still match).
 - The builder warns when a pair's width differs by more than 3% (or its height, for non-full-page pairs), and the slider letterboxes both at one scale instead of cropping. A warning means retake the After.
 
+**Marks (optional): numbered boxes plus a zoomed crop of each spot.** Marks answer _where on the page_ and let the reader see each change at a readable size; the slider answers _what changed overall_. They go together: a marked pair keeps its slider, boxes sit on it, and under it each mark gets a row with a number, your label and a Before | After crop of that spot (a single shot gets one crop). The crops are what make a full-page shot usable, because the page itself is shrunk to the card width.
+
+- **Use marks when** the page is long and each change is small (copy, colour, spacing, an icon), or one screen carries two or more separate changes or defects, or a Before bug shot has a subtle defect (a misaligned label, a wrong word). Typical fit: an issue batch where each fix touches one element on a long page.
+- **Skip marks when** one big change fills the screen (a redesign: the slider is enough), the shot is already cropped to the element, the step is a flow step or an explanation, or there is nothing to point at. If you only want the reader to see a single element at full size, cropping the screenshot is cheaper than marks.
+- Six marks at most per shot; more and the numbers stop helping, so split the shot.
+- Never burn arrows into the PNG: that alters the slider's pixels and needs an image read to check. The builder draws the boxes in CSS and outlines the spot in the crops it makes.
+- **Hand marks are the default** for a pair you made: you know which elements you edited. Get the rects from the DOM in the same `page.evaluate` that takes the shot (Before rects before the edit, After rects after): `[...document.querySelectorAll(sel)].map(e => { const r = e.getBoundingClientRect(); return [r.x + scrollX, r.y + scrollY, r.width, r.height].map(v => Math.round(v * devicePixelRatio)) })`. Rects are `[x, y, w, h]` in the saved PNG's pixels. Measure the element that changed, not a wrapper around it (a wrapper gives an offset box).
+- Single shot: `"marks": [{"label": "Heading typo: 'Recieve'", "rect": [48,160,760,114]}]`.
+- Pair: `{"label": "...", "before": [x,y,w,h], "after": [x,y,w,h]}`. Boxes are red on the Before side and green on the After side and follow the slider; give the After rect from the After page (the element may have moved), and leave `after` out when the element is gone (the crop says "removed") or `before` out when it is new.
+- The label says what changed or is wrong, not just where; the shot's caption stays one sentence.
+- `"auto_marks": true` on a before/after step draws the marks from a pixel diff (needs `numpy` and `scipy`; skipped with a warning without them). Use it when you have no rects, or as an audit for changes you did not intend (a box far from every edit you made). Honest limits, measured on two real apps with five edits each: it finds the edits, but nearby edits merge into one large box ("several edits merged"), layout shift leaves thin strips (the builder drops page-wide and thin ones and says so under the shot), and the labels are generic ("Changed area 2"), so the reader relies on the crops. Freeze random data in both captures first, or numbers that moved on their own show up as changes: `page.addInitScript(() => { let s = 42; Math.random = () => (s = s * 16807 % 2147483647, (s - 1) / 2147483646) })` before navigating.
+- Screenshots can time out ("waiting for fonts to load"): delete the old file, retry, and check the new file exists before using it, or a stale shot gets mistaken for the new one.
+
 ## Kinds of report
 
-| Kind | Sections and steps | Use when |
-|---|---|---|
-| **Flow** | one section per role handoff; `img` shots in the order a user lives it, negative paths included | a feature or multi-role journey |
-| **Issue batch** | one section per issue, in the user's words, with a `status`; a `before`/`after` pair, then `img` proof it holds | "here are N problems, fix them" |
-| **Fix** | one pair per symptom, then proof (follow-on step, edge case) | a single bug fix |
-| **Visual change** | one pair per screen or state (light, dark, mobile, empty, error) | a restyle or redesign |
+| Kind              | Sections and steps                                                                                              | Use when                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| **Flow**          | one section per role handoff; `img` shots in the order a user lives it, negative paths included                 | a feature or multi-role journey |
+| **Issue batch**   | one section per issue, in the user's words, with a `status`; a `before`/`after` pair, then `img` proof it holds | "here are N problems, fix them" |
+| **Fix**           | one pair per symptom, then proof (follow-on step, edge case)                                                    | a single bug fix                |
+| **Visual change** | one pair per screen or state (light, dark, mobile, empty, error)                                                | a restyle or redesign           |
 
 Reports can mix kinds. Every section gets an honest `status`: `fixed`, `partial` (say what is left),
-`not reproduced` (show the Before that looks fine), `needs decision`, `unverified`
+`not reproduced` (show the Before that looks fine), `needs decision` (only for the exceptions under _Decide, do not park_; every other product call is decided by you and shown as `fixed` with a "Decision made:" summary), `unverified`
 (fix made, not re-run), `current design` (it works the way it is built and documented today, not a defect: show it and say which rule or decision it follows, never `not fixed`; neutral on purpose: "by design" reads as blaming the user for asking), `not fixed` (a real defect left open; say why).
 **`needs decision` must name the decision**: the section's `summary` states the exact question, the options (A/B/C, each with its consequence) and your recommendation, in plain words. "Left as is; your call" is not a decision. Show a shot per option when they look different. Non-visual issues still get a section: shoot where the user would notice, or put the evidence in the caption.
 A pair's caption says what changed ("Approve stays disabled until an ID is uploaded"), not "after".
 
 **Coverage check (batches).** The user may never reread their prompt, so a dropped ask is invisible.
 Inline comments, annotations, "also do X" asides and **questions** each count as an ask.
+
 1. Write each ask with the user's **exact words** and what it was attached to to `asks.md` (say so if an annotation is unreadable).
 2. Before building, reread the original message (not your memory of it) against the list.
 3. Put **every** ask in the spec, none left out: `"asks":[{"quote","on","did","flow":3,"status"}]`. `status` is required (same words as a section's). `flow` is the section that shows it, or `null` for a question or non-visual ask, which you also answer in full in the chat. The builder warns about a section that answers no ask and refuses an ask with no status.
 4. The report ends with an **Everything you asked** checklist: each ask once, its status, where it is shown ("section 3", or "answered in the chat"). Undone or partial asks still appear. Never drop one.
 5. In the reply, after the report, state the count against your reread: "9 of 9 asks covered: 6 fixed, 2 answered, 1 needs your decision".
+6. Then the **Decisions I made** list (see _Decide, do not park_), so the user can overrule any of them.
 
 ## Explanations (how-it-works questions)
 
@@ -138,6 +157,7 @@ An ask like "how does X work?", "why is Y a separate page?" or "what do these to
 **Lead with the answer.** The section `summary` and the ask's `did` are the direct answer in one or two plain sentences ("Because people with no pass are redirected there and Chapa sends them back there, so it has to work before Settings is reachable"). Never the question restated.
 
 **Cards** (3 to 5, left to right in reading order). Each card's `caption` is its takeaway as a sentence, not a label ("Unpaid users cannot reach Settings, so payment needs a page outside it", not "Where the page is used"). Cover what applies:
+
 1. **The short answer + who or what is involved**, with each jargon term defined once ("Chapa is the payment provider").
 2. **What happens, in order**, with the real trigger and the result of each step.
 3. **Every branch the code has**: the other role, the failure, the empty state, what happens if the user does X instead.
@@ -147,6 +167,7 @@ An ask like "how does X work?", "why is Y a separate page?" or "what do these to
 Completeness test: for each branch in the code, could the reader find it on a card? If not, add the card.
 
 **The kit** (colours come from theme variables only; no `<script>`, `on*=` handlers or `javascript:` links; the builder refuses them):
+
 - `<div class=x-ans>` the one-sentence answer, big, at the top of the first card.
 - `<ol class=x-steps><li><b>What happens</b><span>Plain words, with <span class=x-code>/real/route</span>.</span></li>...</ol>`: a numbered vertical list joined by a line. Use it for **every sequence**; the builder numbers the items. Never a wrapping row of boxes with arrows.
 - `<div class=x-cols><div class="x-col hot"><h4>Heading</h4><ol class=x-steps>...</ol></div><div class=x-col>...</div></div>`: branches or options side by side, stacking on a narrow screen. `hot` marks the current or recommended one.
@@ -162,7 +183,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 - **Title** = what the user would notice, in everyday words ("A free Code no longer asks for a card"). No issue IDs, ticket numbers or "1." prefixes.
 - **`summary`** (per section): one or two sentences, what was wrong and how it ended up. It must agree with `status`.
 - **`caption`** (per step): one short sentence on what is on screen, or for a pair what changed. No pixel sizes, CSS/DOM words or jargon.
-- **`detail`** (per step, optional): technical evidence (numbers, element names, which account, substituted data) in small grey type. Anything that changes how to read a pair (different account or state) goes in `detail` *and* plainly in the caption.
+- **`detail`** (per step, optional): technical evidence (numbers, element names, which account, substituted data) in small grey type. Anything that changes how to read a pair (different account or state) goes in `detail` _and_ plainly in the caption.
 - **`limits`**: at most ~8 short bullets of what was not checked. No session names or agent chatter.
 - Short sentences, active voice, same language as the user.
 
@@ -170,7 +191,7 @@ The reader is busy and not technical. If they must ask what a line means, it fai
 
 - **One combined report per subject**, not one file per agent. Merge the per-agent specs into one `spec.json`.
 - **Show it inline.** In T3 Code the embed goes into the chat via `html_render`; a link alone is not enough.
-- **One page unless it is really long.** Up to ~25 sections stay on one page: the jump bar makes them reachable and extra pages only make the reader click. Over ~25, give each flow a `"group"` by *area of the product* ("Buyer", "Admin"), not by role handoff or page, and build with `--split`: at most 4 parts of 6+ sections each, plus a short index. **Show the part pages, never the index on its own**: its list repeats the parts' jump bars as a wall of status text. Link the index in the file reply only. Merge small groups. The builder warns when a split is unneeded or too fine.
+- **One page unless it is really long.** Up to ~25 sections stay on one page: the jump bar makes them reachable and extra pages only make the reader click. Over ~25, give each flow a `"group"` by _area of the product_ ("Buyer", "Admin"), not by role handoff or page, and build with `--split`: at most 4 parts of 6+ sections each, plus a short index. **Show the part pages, never the index on its own**: its list repeats the parts' jump bars as a wall of status text. Link the index in the file reply only. Merge small groups. The builder warns when a split is unneeded or too fine.
 - **Jump bar:** every page, standalone and embed, opens with a sticky bar: counts by status (e.g. "3 fixed"), then one numbered, status-coloured link per section, so the reader jumps to any section from anywhere in the report. Keep section titles short; they show on hover. Embeds also sit in a scroll box: 680px inline (so a long part stays short in the chat), and the full window height when opened in the panel or full screen (a script in the page sets it, because `html_render` rejects `vh`: in full screen the frame is taller than the content, and the script grows the box to fill the gap). Keep `height` at 700 or below, or the script mistakes the inline frame for full screen.
 
 ## Build the report
@@ -180,11 +201,11 @@ The reader is busy and not technical. If they must ask what a line means, it fai
    a step is `{"img":"/abs.png","caption","detail"}`, `{"before":"/abs.png","after":"/abs.png","caption","detail"}` (a drag-to-compare slider) or `{"html","caption"}` (an explanation). `status`, `summary`, `group` and `detail` are optional; every ask needs a `status`.
 2. `python3 -I <skill-dir>/build_report.py spec.json index.html` (needs Python 3 and Pillow: `pip install pillow`; standalone, base64 JPEGs, sticky jump bar). It checks the whole spec first and lists every problem with its fix (missing caption or file, bad status, a step with the wrong keys, an ask with no status, unsafe explanation HTML). Then read the closing `== summary ==`: each warning (size mismatch, no ask answered, low res) is fixed or explained in `limits`.
 3. Give the user a markdown link to the absolute `.html` path (T3 opens it in the side panel; click a shot for the viewer). Never Read the HTML (megabytes of base64).
-4. **In T3 Code (`html_render` exists), also show it inline:** build with `--embed` (add `--split` for several parts; it writes `<base>-<group>.html` plus the index at the given path, images in `embed-img/<name>/`). `cat` the page (a few KB to ~30 KB, no base64) and pass it verbatim as `html_render`'s `html`, with a `title` and `height: 700`; a larger `height` makes the in-page script treat the inline frame as full screen. T3 swaps each image path for its data on the server.
+4. **In T3 Code (`html_render` exists), also show it inline:** build with `--embed` (add `--split` for several parts; it writes `<base>-<group>.html` plus the index at the given path, images in `embed-img/<name>/`). Pass the file's absolute path as `html_render`'s `path` (never `cat` it into `html`: a long page pasted as an argument gets cut off or fails), with a required `title` and `height: 700`; a larger `height` makes the in-page script treat the inline frame as full screen. The file must start with `<!doctype html>` (the builder writes it; a hand-edited page must keep it). T3 swaps each image path for its data on the server.
    - Image paths must be **literal absolute paths in the markup**; a path built in JS shows broken.
    - Colours come from T3 theme variables (`--accent`, `--card`, `--border`, `--ring`, ...), never hardcoded.
    - `html_render` rejects `vh`/`dvh` units and `height:100%` on html or body, which is why the scroll box is in px. Keep it that way.
-   - Limits: 10 MiB per image, 25 MiB per page once inlined. Clicking a shot in the chat is left to T3, which opens the image in its own viewer (the report adds no zoom of its own).
+   - Limits: 10 MiB per image, 25 MiB per page once inlined; inline `html` (not `path`) is capped at about 500 KB. Clicking a shot in the chat is left to T3, which opens the image in its own viewer (the report adds no zoom of its own).
    - Check: the stored page `~/.t3/userdata/attachments/<id>.html` has one `data:image/` per step and no local absolute paths left (grep for your home folder). `html_preview` proves nothing, it reads local paths.
 
 ## Honesty section is mandatory
