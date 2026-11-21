@@ -1,148 +1,102 @@
 # Skills
 
-Agent skills for repeatable development workflows across Claude Code,
-OpenCode, Codex, and other skill-aware coding agents.
+Agent skills for Claude Code, OpenCode, Codex and other agents that read
+`SKILL.md` files. Each top-level folder is one skill.
 
-## Installation
+## Install
 
-Install through [Vercel Skills](https://github.com/vercel-labs/skills). It
-discovers the skills in this repository, asks which ones and which agents to
-target, and manages project or global installation without manual file copying.
-
-From the repository's GitHub location:
+Install with the [Vercel Skills CLI](https://github.com/vercel-labs/skills). It
+reads this repository from GitHub, asks which skills and which agents you want,
+and copies them into place.
 
 ```bash
-npx skills@latest add nathnael-desta/skills --global
+npx skills@latest add nathnael-desta/skills            # current project
+npx skills@latest add nathnael-desta/skills --global   # every project
 ```
 
-Because this repository exposes multiple skills, the installer lets you choose
-which workflows to install. OpenCode is included through the always-on
-Universal `.agents/skills` target; select any additional agent-specific targets
-you also want, then confirm the installation.
-
-For a non-interactive OpenCode installation:
+One skill, no prompts:
 
 ```bash
-npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent opencode --global -y
+npx skills@latest add nathnael-desta/skills --skill writing-tests --agent claude-code -y
 ```
 
-The orchestration skills used by `opencode-agent-flows` install the same way:
-
-```bash
-npx skills@latest add nathnael-desta/skills \
-  --skill browser-control-operations --skill antigravity-delegation \
-  --agent opencode --global -y
-```
-
-From a local clone:
-
-```bash
-npx skills@latest add /path/to/this-repository
-```
-
-Omit `--global` to install into only the current project. See [installation and
-lifecycle](docs/installation.md) for other targeted, unattended, update,
-verification, and removal commands.
-
-Restart or reload the selected agent if required, then invoke
-`setup-github-beads` in the Git repository you want to configure.
-
-`setup-github-beads` is the single setup entry point. It can configure Claude
-Code, OpenCode, Codex, or another user-selected agent; install a lean
-project-local Beads skill for OpenCode; and extend the currently installed Matt
-Pocock setup skill without recreating its GitHub tracker behavior. If the
-upstream setup dependency is missing, it offers to install it through Vercel
-Skills.
-
-The setup distinguishes machine prerequisites from per-repository state. If the
-GitHub CLI, Beads CLI, repository database, Beads GitHub access, or agent
-integration is missing, it explains that layer and walks through recovery
-before continuing.
+Update, list, remove and the lock file: [docs/installation.md](docs/installation.md).
 
 ## Skills
 
-- `setup-github-beads` - retain the current Matt Pocock GitHub Issues workflow
-  and add Beads as the implementation execution graph plus a scoped, pull-only
-  GitHub planning mirror with minimal defaults and routing policy.
-- `browser-control-operations` - operating policy for driving a browser through
-  Browser Control: headless agent browser by default and the user's Chrome
-  only for its logged-in tabs, compact `bcx` output, `page.evaluate` for
-  document work, real waits instead of sleeps, bounded snapshots, visual
-  checkpoints, and human handoff.
-- `browser-control-setup` - install, check, repair, upgrade and smoke-test the
-  Browser Control setup on Linux. It covers systemd relays that outlive agent
-  sessions and a headless Chrome for Testing that never takes the user's focus,
-  plus the `bcx` wrapper and a Claude Code guard hook. Ships `install.sh`,
-  `doctor.sh` and `smoke-test.sh`.
-- `antigravity-delegation` - policy for offloading perception-heavy and
-  large-context read-only work to Google Gemini through Antigravity, including
-  what to substitute, what is prohibited, and how to respect the AI Pro quota.
-- `open-design-archetypes` - plan and propagate reusable Open Design archetype
-  packages between a design project and a production codebase, with route
-  mapping, coverage matrices, and parity gates.
-- `open-design-archetype-authoring` - create a static-data Open Design baseline
-  and companion frames from a production Reference Route, then hand it to a
-  human for redesign.
-- `open-design-archetype-propagation` - propagate an approved redesigned Open
-  Design artifact into production while preserving behavior and verifying parity.
-- `open-design-implementation` - implement or refine production UI from an
-  Open Design artifact with exact source parity while preserving production
-  behavior.
+### Tests and CI
 
-- `writing-tests` - rules for deciding whether and how to add a test: name
-  the bug first, extend before adding, mock only at system boundaries, red
-  before green, and report each new test with the bug it catches. Cites only
-  checked evidence.
-- `pruning-tests` - audit an existing suite: cheap-model first pass in
-  incremental batches, per-test coverage of the delete and merge candidates,
-  a stronger-model re-review, per-file user approval, then parallel apply.
-  Ships the rubric, briefs, and a coverage script.
-- `speeding-up-ci` - diagnose slow GitHub Actions CI in order: measure,
-  remove duplicate runs and waste, cache, fix slow database and frontend
-  tests, then shard or buy runners. Includes measured before and after
-  numbers and the commands to get your own.
-- `reviewing-deploys` - checklist for a push-to-deploy pipeline (rollback
-  capture, deployed SHA, build fallback, pruning, health gate, migrations,
-  gating on the tree CI passed) and a shimmed-docker simulation harness for
-  the deploy script.
-- `local-ci` - run a pull request's GitHub Actions jobs on this machine and
-  get a verdict you can merge on: the workflow's own commands on the PR merged
-  into its base, a fresh environment per job, and a private Postgres per run, so
-  parallel worktrees don't collide. `act.md` covers act's pitfalls and how to
-  run act safely.
+- `writing-tests` - rules for adding, changing or deleting a test: name the bug
+  first, extend before adding, mock only at system boundaries, red before green,
+  and report each new test with the bug it catches.
+- `pruning-tests` - audit an existing suite: a cheap-model first pass in batches,
+  per-test coverage of the delete and merge candidates, a stronger-model
+  re-review, per-file approval, then the edits. Ships the rubric, briefs and a
+  coverage script.
+- `speeding-up-ci` - speed up slow GitHub Actions CI in order: measure, remove
+  duplicate runs, cache, fix slow database and frontend tests, then shard or buy
+  runners. Includes measured before and after numbers.
+- `reviewing-deploys` - checklist for a push-to-deploy pipeline (rollback,
+  deployed SHA, health gate, migrations, gating on the tree CI passed) and a
+  shimmed-docker harness to simulate the deploy script.
 
-- `update-catalog` - generate structured, high-signal feature breakdowns,
-  release changelogs, and "what's new" update catalogs for any project,
-  repository, or tool using the standardized Update Catalog format.
+### Reviews and handoffs
 
-- `claude-mode` - switch Claude Code between lean and burn cost modes (needs the
-  machine-local `claude-mode` script).
+- `codex-code-review` - review local changes with the OpenAI Codex CLI: staged,
+  branch-diff, security and performance reviews, with prompts and a runner
+  script.
+- `claude-session-handoff` - turn a Claude Code session from a repository or
+  worktree into a redacted Markdown handoff for a fresh agent.
+- `end-to-end-feature-explainer` - explain a finished feature or ticket sequence
+  end to end: spec, tickets, architecture, runtime flows, checks and remaining
+  limits.
 
-- `codex-code-review` - review local repository changes with the OpenAI Codex
-  CLI: staged, branch-diff, security and performance reviews, with review prompts
-  and a runner script.
-- `skills-keeping` - where skills live and how they stay in sync: this repo is
-  the single editable source, every agent folder holds symlinks into it. How to
-  add a skill, check drift with `scripts/check_drift.py`, and set up another
-  machine.
+### Feature workflow
+
+These build on Matt Pocock's skills (`wayfinder`, `grilling`, `to-spec`,
+`to-tickets`); install those from
+[mattpocock/skills](https://github.com/mattpocock/skills) first.
+
+- `plan-feature` - turn a settled Wayfinder or grilling outcome into one spec
+  issue and approved, dependency-ordered tickets, without starting work.
+- `execute-feature` - implement an approved spec's tickets in order, or in
+  parallel worktree batches when they are independent, with a review per ticket.
+- `ship-feature` - plan-feature and execute-feature in one run, ending in an
+  acceptance report.
+- `finish-ticket` - check a finished ticket and list what is still required
+  before closing it.
+- `prototype-review` - review a throwaway prototype against its Wayfinder
+  question and produce a short decision brief.
+
+### Browser and visuals
+
+- `visual-proof` - drive the real app, fix what you find, re-walk it, and hand
+  back an HTML report of captioned screenshots and before/after sliders.
+  Needs a browser driver (`browse` or Playwright) and Python 3.
+- `t3-visualize` - show charts, timelines and before/after inline with T3 Code's
+  `html_render` and `html_preview` tools.
+- `gemini-research` - research with Gemini Deep Research and Gemini Tasks in
+  the user's own browser: prompt template, parallel tabs, extraction, and
+  checking key numbers against the sources. Needs the `browse` CLI.
+
+### Other
+
+- `antigravity-delegation` - hand screenshots, PDFs, diagrams and whole-repo
+  reads to Google Gemini through Antigravity, with what it may and may not do.
+- `update-catalog` - write feature breakdowns, changelogs and "what's new"
+  catalogs for a project in a fixed format.
 
 ## Development
 
 ```bash
-npm test
-npm run verify:skills
+npm install
+npm test                 # structure, frontmatter and formatting
+npm run verify:skills    # ask the Skills CLI to discover every skill
 ```
 
-Each skill lives in a top-level directory with a required `SKILL.md`. Detailed
-material belongs under that skill's `references/` directory so the main skill
-stays concise.
-
-## Publishing
-
-Publish the repository at a stable Git URL so Vercel Skills can record source
-provenance and update installed skills from upstream. Before publishing, run
-`npm test` and `npm run verify:skills`.
+A skill is a folder with a `SKILL.md` whose frontmatter `name` matches the
+folder. Longer material goes in that skill's `references/` folder.
 
 ## License
 
-MIT
+MIT. Each skill is the author's own work unless its `SKILL.md` says otherwise.

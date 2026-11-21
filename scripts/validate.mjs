@@ -21,7 +21,7 @@ for (const entry of entries) {
   if (
     !entry.isDirectory() ||
     entry.name.startsWith(".") ||
-    ["docs", "node_modules", "research", "scripts"].includes(entry.name)
+    ["docs", "node_modules", "scripts"].includes(entry.name)
   ) {
     continue;
   }
@@ -73,6 +73,15 @@ for (const entry of entries) {
   if (name && name.length > 64)
     errors.push(`${entry.name}: name exceeds 64 characters`);
   if (!description) errors.push(`${entry.name}: missing description`);
+  const rawDescription = frontmatter[1].match(/^description:\s*(.+)$/m)?.[1];
+  if (
+    rawDescription &&
+    !/^["']/.test(rawDescription) &&
+    rawDescription.includes(": ")
+  )
+    errors.push(
+      `${entry.name}: quote the description, it contains ": " (the Skills CLI skips it otherwise)`,
+    );
   if (description && description.length > 1024)
     errors.push(`${entry.name}: description exceeds 1024 characters`);
   if (description?.includes("allowed-tools:"))

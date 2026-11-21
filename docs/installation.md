@@ -1,9 +1,7 @@
-# Installation and Lifecycle
+# Installation and lifecycle
 
-Vercel Skills is the supported installer for this repository. Do not manually
-copy individual skill directories into agent-specific locations. On the machine
-that develops these skills, agent folders hold symlinks into the clone instead;
-see the `skills-keeping` skill.
+Vercel Skills is the supported installer for this repository. Do not copy skill
+folders into agent folders by hand.
 
 ## Interactive installation
 
@@ -23,27 +21,19 @@ npx skills@latest add /absolute/path/to/skills
 The CLI asks which discovered skills to install and which detected agents to
 target. Project scope is the default. Pass `--global` for user scope.
 
-## Setup entry point
+## Install one skill
 
-Install only the GitHub + Beads setup skill for known agents when an interactive
-selector is not appropriate:
+Install a single skill for known agents when an interactive selector is not
+appropriate:
 
 ```bash
-npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent opencode -y
-npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent claude-code -y
-npx skills@latest add nathnael-desta/skills --skill setup-github-beads --agent opencode claude-code -y
+npx skills@latest add nathnael-desta/skills --skill writing-tests --agent opencode -y
+npx skills@latest add nathnael-desta/skills --skill writing-tests --agent claude-code -y
 ```
 
 Supported IDs used by this repository are `opencode`, `claude-code`, and
 `codex`. For another agent, use the interactive installer rather than guessing
 its identifier.
-
-After installation, restart or reload the agent when required and invoke
-`setup-github-beads` from the target project. The setup runs the currently
-installed Matt Pocock setup as its base flow and lets that upstream process own
-GitHub Issues, labels, and domain docs. It adds only Beads defaults, GitHub sync
-access, and routing policy to the same draft and confirmation. It does not
-require an existing `AGENTS.md` and does not select an issue to implement.
 
 ## Verify installation
 
@@ -78,20 +68,16 @@ npx skills@latest update --global
 Update one skill when only that workflow should move:
 
 ```bash
-npx skills@latest update setup-github-beads --project
+npx skills@latest update writing-tests --project
 ```
-
-After updating `setup-github-beads`, rerun it in the target repository. It
-checks agent integrations and regenerates the lean OpenCode Beads skill when the
-installed Beads OpenCode recipe changed.
 
 ## Remove or move
 
 Use Vercel Skills rather than moving directories manually:
 
 ```bash
-npx skills@latest remove setup-github-beads
-npx skills@latest remove setup-github-beads --global
+npx skills@latest remove writing-tests
+npx skills@latest remove writing-tests --global
 ```
 
 To change scope or agents, remove the named skill at project and global scope as

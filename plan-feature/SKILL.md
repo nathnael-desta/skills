@@ -46,7 +46,7 @@ plans only; it never starts implementation or closes the parent issue.
    native parent/sub-issue relationship when available; otherwise preserve the
    spec reference in the ticket's `## Parent` section or local-ticket metadata.
 6. Verify every ticket has a dependency edge or an explicit `None — can start
-   immediately` state. The ticket order must be dependency-safe, with blockers
+immediately` state. The ticket order must be dependency-safe, with blockers
    before dependents.
 
 Do not close or modify the spec issue after publishing tickets. If a ticket is

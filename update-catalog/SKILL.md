@@ -25,6 +25,7 @@ Whenever a user asks what has changed, what features were merged, or asks for re
 ## When To Use
 
 Use this skill when the user asks:
+
 - "What's new since the last time we checked?"
 - "Any new features since version X?"
 - "Give me a feature breakdown of recent changes"
@@ -55,26 +56,29 @@ Applicable to **any** codebase, repository, or product (not limited to any singl
 Every catalog must strictly adhere to the following layout:
 
 ### 1. Scope Intro Header
+
 State the branch, start commit/version, end commit/version, and readable date range:
+
 ```markdown
 Here is the feature breakdown and changelog of everything merged into `main` since `<start-tag-or-commit>` through `<end-tag-or-commit>` (<Start Month Day> – <End Month Day, Year>):
 ```
 
 ### 2. Main Title Banner
+
 ```markdown
 # 🚀 <Project/Product Name> Update Catalog (<Version/Commit Range>)
 ```
 
 ### 3. Numbered User-Facing Feature Sections
+
 Format each major user-visible feature or capability as a numbered section:
 
 ```markdown
 ### <N>. <Feature or Capability Title>
 
-* <Sub-Topic / Functional Area>:
-
-  * PR: [🐙#<PR_NUMBER>](https://github.com/<owner>/<repo>/pull/<PR_NUMBER>) — `<commit_type>(<scope>): <short description>`
-  * What it does:
+- <Sub-Topic / Functional Area>:
+  - PR: [🐙#<PR_NUMBER>](https://github.com/<owner>/<repo>/pull/<PR_NUMBER>) — `<commit_type>(<scope>): <short description>`
+  - What it does:
     ▪ <Core user-facing behavior, problem solved, or what changed in the UI / product experience.>
     ▪ <Technical detail, architecture, safeguards, or under-the-hood implementation highlight.>
 ```
@@ -82,6 +86,7 @@ Format each major user-visible feature or capability as a numbered section:
 If multiple related PRs contribute to the same area, nest them under their respective `* <Sub-Topic>:` blocks.
 
 ### Rules & Formatting Standards:
+
 - **Header Emoji**: Always start the main catalog title with `# 🚀`.
 - **Embedded PR / Commit Links**: PR numbers MUST be formatted as `[🐙#<PR_NUMBER>](<FULL_PR_URL>)` followed by an em-dash `—` and the exact commit header in inline code format: `` `feat(scope): title` ``. For commit SHAs, format as `[🐙`<short_sha>`](<FULL_COMMIT_URL>)`.
 - **What it does block**: Use `* What it does:` followed by indented square black bullets (`▪`) for the explanation items.
